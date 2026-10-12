@@ -4,10 +4,11 @@ Kinochy is a movie-based English learning platform with streaming playback, inte
 
 ## Stack
 
-- Frontend: React 19 + Vite
-- Backend: Node.js + Express
+- Frontend: Next.js + TypeScript
+- Styling: Tailwind CSS
+- Backend: ASP.NET Core 8 Web API
 - Database: PostgreSQL
-- Video tools: HLS.js on the client, FFmpeg in the app container
+- Video playback: HLS.js on the client, with direct video streaming from ASP.NET Core
 - Email verification: Brevo API/SMTP, Gmail SMTP, or generic SMTP
 
 ## Features
@@ -21,34 +22,59 @@ Kinochy is a movie-based English learning platform with streaming playback, inte
 
 ## Project Structure
 
-- `src/`: React frontend
-- `server/`: Express API, auth, email, translation, media routes
-- `database/`: PostgreSQL schema and seed data
-- `public/`: static assets such as icons and logos
-- `storage/`: uploaded files and runtime data
+- `frontend/app/`: Next.js App Router, metadata, and global Tailwind styles
+- `frontend/src/`: typed API utilities and feature components
+- `frontend/public/`: static assets such as icons and logos
+- `backend/Controllers/`: HTTP API and media endpoints grouped by responsibility
+- `backend/Services/`: authentication, movies, users, translation, and media logic
+- `backend/Data/`: PostgreSQL access and initialization
+- `backend/Models/`: API contracts and domain records
+- `backend/Infrastructure/`: shared API middleware
+- `backend/database/`: PostgreSQL schema and seed data
+- `backend/storage/`: uploaded files and runtime data
 - `docker-compose.yml`: production-style Docker deployment
 - `Dockerfile`: application image build
 
-## Local Development Without Docker
+## Installation Without Docker
 
-1. Install dependencies:
-
-```bash
-npm ci
-```
-
-2. Create `.env` from `.env.example` and fill in the values you need.
-
-3. Start frontend and backend together:
+These commands use a Unix-style shell (Linux or macOS). Install the .NET 8 SDK, Node.js 22 (including npm), and PostgreSQL 16 or newer. Start the PostgreSQL service and create a database user and database:
 
 ```bash
-npm run dev
+psql -U postgres -c "CREATE USER kinochy WITH PASSWORD 'change-me';"
+psql -U postgres -c "CREATE DATABASE kinochy OWNER kinochy;"
 ```
 
-4. Open:
+If PostgreSQL uses local peer authentication (common on Debian/Ubuntu), run `sudo -u postgres psql` instead of `psql -U postgres`. If your installation uses a different administrator account, run the commands as that account. Replace `change-me` with your own password; URL-encode special characters when putting the password in `DATABASE_URL`. The backend applies `backend/database/schema.sql` when it starts.
 
-- `http://localhost:5173` for Vite dev mode
-- `http://localhost:4000/api/health` for backend health
+Install frontend dependencies and restore the backend packages from the repository root:
+
+```bash
+npm install
+dotnet restore backend/Kinochy.Api.csproj
+```
+
+Start the API in terminal 1:
+
+```bash
+cd backend
+ASPNETCORE_URLS=http://localhost:4000 \
+DATABASE_URL=postgresql://kinochy:change-me@localhost:5432/kinochy \
+CLIENT_ORIGIN=http://localhost:5173 \
+JWT_SECRET=replace-with-a-long-random-secret \
+ADMIN_EMAIL=admin@kinochy.local \
+ADMIN_PASSWORD=replace-with-a-strong-admin-password \
+dotnet run --no-launch-profile
+```
+
+Start Next.js from the repository root in terminal 2:
+
+```bash
+npm run dev:client
+```
+
+Open `http://localhost:5173`. Check the API at `http://localhost:4000/api/health`. The frontend uses `http://localhost:4000` for API requests in development; if you use another API address, set `NEXT_PUBLIC_API_URL` before starting Next.js.
+
+For local runs, set the backend variables in the process environment as shown above. `.env` is read by Docker Compose, but the ASP.NET app does not load that file on its own. Uploaded files are kept in `backend/storage/uploads`.
 
 ## Docker Deployment
 
@@ -75,8 +101,10 @@ cp .env.example .env
 - `POSTGRES_USER=kinochy`
 - `POSTGRES_PASSWORD=strong-db-password`
 - `ADMIN_EMAIL=admin@your-domain.com`
-- `ADMIN_USER_NAME=Admin`
 - `ADMIN_PASSWORD=strong-admin-password`
+- `DEFAULT_USER_NAME=Example User`
+- `DEFAULT_USER_EMAIL=user@your-domain.com`
+- `DEFAULT_USER_PASSWORD=strong-user-password`
 - `BREVO_API_KEY=your-brevo-api-key`
 - `BREVO_API_URL=https://api.brevo.com/v3/smtp/email`
 - `BREVO_IP_FAMILY=4`
@@ -88,6 +116,10 @@ cp .env.example .env
 ```bash
 docker compose up -d --build
 ```
+
+At API startup, Docker Compose seeds an admin account for `/admin` and a verified regular user for the main sign-in page. Their credentials come from `ADMIN_EMAIL`/`ADMIN_PASSWORD` and `DEFAULT_USER_EMAIL`/`DEFAULT_USER_PASSWORD` in `.env`. Set these before the first deployment; the example passwords are public and should not be used on a real server.
+
+With `SEED_SYNC_PASSWORDS=true` (the Docker Compose default), each startup updates the passwords of existing accounts with those seed email addresses to match `.env`. This also repairs seed accounts left in an existing database volume with older passwords. Set `SEED_SYNC_PASSWORDS=false` to preserve existing passwords, or `SEED_ACCOUNTS=false` to disable account seeding entirely.
 
 5. Check status:
 
@@ -111,26 +143,24 @@ Uploaded movie assets are stored inside the app volume under `/app/storage/uploa
 
 ## Environment Variables
 
-The runtime reads `.env` from the project root.
+Docker Compose reads `.env` from the project root. For a run without Docker, set the variables in the process environment.
 
 Important variables:
 
-- `PORT`: internal Node port, normally `4000`
+- `ASPNETCORE_URLS`: API listen address when running without Docker, for example `http://localhost:4000`
 - `APP_PORT`: host port exposed by Docker Compose
 - `APP_BASE_PATH`: public mount path for subpath deployments, for example `/kinochy`
 - `CLIENT_ORIGIN`: allowed browser origin for CORS
 - `JWT_SECRET`: JWT signing secret
 - `UPLOAD_MAX_BYTES`: maximum size for each uploaded file, default `8589934592` bytes
-- `REQUEST_TIMEOUT_MS`, `HEADERS_TIMEOUT_MS`, `KEEP_ALIVE_TIMEOUT_MS`: Node HTTP timeout settings for large uploads
-- `MEDIA_INITIAL_CHUNK_BYTES`: optional first partial video response size when a client does not send a byte range, default `0` disabled
-- `VIDEO_OPTIMIZE_ON_UPLOAD`: set to `true` only if uploads should wait for FFmpeg optimization before responding
-- `VIDEO_BACKGROUND_OPTIMIZE`: set to `false` to disable automatic background conversion of uploaded videos to stream-ready MP4
-- `VIDEO_HLS_ENABLE`: set to `false` to disable automatic HLS segment generation. HLS is preferred by the player when available because it loads and seeks through small video segments.
-- `DATABASE_URL`: optional direct PostgreSQL connection string for non-Docker runs
+- Uploaded videos are streamed directly. The ASP.NET backend currently does not transcode uploads or generate HLS segments.
+- `DATABASE_URL`: required PostgreSQL connection string for database-backed API routes
+- `NEXT_PUBLIC_API_URL`: optional frontend API address; defaults to `http://localhost:4000` in development
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: PostgreSQL container settings
 - `NODE_IMAGE`, `POSTGRES_IMAGE`: container image overrides if needed
-- `ADMIN_EMAIL`, `ADMIN_USER_NAME`, `ADMIN_PASSWORD`: initial admin account
-- `DEFAULT_USER_NAME`, `DEFAULT_USER_EMAIL`, `DEFAULT_USER_PASSWORD`: default seeded user
+- `ADMIN_EMAIL`, `ADMIN_PASSWORD`: seeded admin sign-in at `/admin`
+- `DEFAULT_USER_NAME`, `DEFAULT_USER_EMAIL`, `DEFAULT_USER_PASSWORD`: seeded verified user for the main sign-in page
+- `SEED_ACCOUNTS`, `SEED_SYNC_PASSWORDS`: control startup account seeding and whether configured passwords replace existing seed-account passwords
 - `TRANSLATE_PROVIDER`, `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`: translation service config
 - `EMAIL_PROVIDER`: `brevo`, `gmail`, or `smtp`
 - `BREVO_API_KEY` or `BREVO_SMTP_KEY`: Brevo verification email provider config
@@ -151,21 +181,26 @@ Important variables:
 
 ```bash
 npm run build
-npm run db:init
-npm run db:seed
-npm run videos:optimize
+dotnet build backend/Kinochy.Api.csproj
+dotnet run --project backend/Kinochy.Api.csproj
+dotnet tool restore
+npm run format
+npm run format:check
 docker compose down
 docker compose up -d --build
 docker compose logs -f app
 docker compose logs -f postgres
 ```
 
+Prettier formats frontend and repository text files using `.prettierrc.json`. CSharpier formats C# and project files using `backend/.csharpierrc.json`; its version is pinned in `.config/dotnet-tools.json`. Run `npm install` and `dotnet tool restore` before using the format commands.
+
+In VS Code, install the recommended extensions when prompted after opening this repository. The workspace selects Prettier for frontend files and CSharpier for C# and project XML files, so **Format Document** works after installing the extensions and restoring the .NET tool.
+
 ## Troubleshooting
 
 - If signup email fails, verify that Brevo transactional sending is enabled and the sender is approved. If the error says Brevo is unreachable, test outbound HTTPS from the server and keep `BREVO_IP_FAMILY=4`.
-- If Docker cannot pull images, try again or override `NODE_IMAGE` and `POSTGRES_IMAGE` in `.env`.
+- If Docker cannot pull images, try again or override `NODE_IMAGE` and `POSTGRES_IMAGE` in `.env` with registry mirrors reachable from your server.
 - If the browser gets CORS errors, make sure `CLIENT_ORIGIN` exactly matches the URL you open in the browser.
-- If large movie uploads reset near the end, keep `VIDEO_OPTIMIZE_ON_UPLOAD=false`, rebuild the app image, and optimize videos later with `npm run videos:optimize`.
-- If an uploaded movie starts and then buffers forever, run `npm run videos:optimize` or `docker compose exec app npm run videos:optimize` so existing videos are converted to stream-ready MP4. New uploads are optimized in the background unless `VIDEO_BACKGROUND_OPTIMIZE=false`.
-- After deploying an updated image, run `docker compose exec app npm run videos:optimize` once for old uploads. This does not add fixed duration rules; it moves MP4 metadata to the front when possible, transcodes unsupported files to browser-friendly H.264/AAC MP4, and creates HLS segments when enabled.
+- If large uploads reset near completion, check the reverse proxy body-size and timeout limits; ASP.NET request-body limits are disabled for the upload API.
+- If media playback buffers, verify the uploaded file exists in `app_storage` and inspect `docker compose logs -f app`.
 - If media uploads work but playback fails, check `docker compose logs -f app` and verify uploaded files exist in `app_storage`.

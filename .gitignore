@@ -1,11 +1,10 @@
 node_modules/
-dist/
+.next/
+frontend/out/
+backend/bin/
+backend/obj/
+backend/wwwroot/
 .env
-storage/uploads/
-storage/data.json
-storage/users.json
-storage/admins.json
-storage/translation-cache.json
-storage/*.txt
+backend/storage/uploads/
 *.log
 *.tar

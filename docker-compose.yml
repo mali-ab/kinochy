@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: ${POSTGRES_IMAGE:-public.ecr.aws/docker/library/postgres:16-alpine}
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     container_name: kinochy_postgres
     restart: unless-stopped
     environment:
@@ -20,7 +20,9 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NODE_IMAGE: ${NODE_IMAGE:-public.ecr.aws/docker/library/node:22-alpine}
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-alpine}
+        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:8.0}
+        DOTNET_RUNTIME_IMAGE: ${DOTNET_RUNTIME_IMAGE:-mcr.microsoft.com/dotnet/aspnet:8.0}
         APP_BASE_PATH: ${APP_BASE_PATH:-/}
     container_name: kinochy_app
     restart: unless-stopped
@@ -28,7 +30,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      NODE_ENV: production
+      ASPNETCORE_ENVIRONMENT: Production
       PORT: 4000
       APP_BASE_PATH: ${APP_BASE_PATH:-/}
       TRUST_PROXY: "true"
@@ -40,9 +42,6 @@ services:
       HEADERS_TIMEOUT_MS: ${HEADERS_TIMEOUT_MS:-600000}
       KEEP_ALIVE_TIMEOUT_MS: ${KEEP_ALIVE_TIMEOUT_MS:-65000}
       MEDIA_INITIAL_CHUNK_BYTES: ${MEDIA_INITIAL_CHUNK_BYTES:-0}
-      VIDEO_OPTIMIZE_ON_UPLOAD: ${VIDEO_OPTIMIZE_ON_UPLOAD:-false}
-      VIDEO_BACKGROUND_OPTIMIZE: ${VIDEO_BACKGROUND_OPTIMIZE:-true}
-      VIDEO_HLS_ENABLE: ${VIDEO_HLS_ENABLE:-true}
       DATABASE_URL: postgres://${POSTGRES_USER:-kinochy}:${POSTGRES_PASSWORD:-kinochy}@postgres:5432/${POSTGRES_DB:-kinochy}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kinochy.local}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-KinochyAdmin@4321!}
@@ -50,6 +49,8 @@ services:
       DEFAULT_USER_NAME: ${DEFAULT_USER_NAME:-Allberdov}
       DEFAULT_USER_EMAIL: ${DEFAULT_USER_EMAIL:-allberdov@gmail.com}
       DEFAULT_USER_PASSWORD: ${DEFAULT_USER_PASSWORD:-Kinochy@4321!}
+      SEED_ACCOUNTS: ${SEED_ACCOUNTS:-true}
+      SEED_SYNC_PASSWORDS: ${SEED_SYNC_PASSWORDS:-true}
       TRANSLATE_PROVIDER: ${TRANSLATE_PROVIDER:-libretranslate}
       LIBRETRANSLATE_URL: ${LIBRETRANSLATE_URL:-https://translate.mstdn.social/translate}
       LIBRETRANSLATE_API_KEY: ${LIBRETRANSLATE_API_KEY:-}
