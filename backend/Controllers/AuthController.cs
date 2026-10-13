@@ -5,10 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace Kinochy.Api.Controllers;
 
 [ApiController]
-public sealed class AuthController(AuthService auth,TokenService tokens,IConfiguration configuration):ControllerBase
+public sealed class AuthController(AuthService auth,TokenService tokens):ControllerBase
 {
-    private bool Secure=>configuration["COOKIE_SECURE"]?.Equals("true",StringComparison.OrdinalIgnoreCase)??false;
-    private CookieOptions Cookie(TimeSpan age)=>new(){HttpOnly=true,SameSite=SameSiteMode.Lax,Secure=Secure,MaxAge=age};
+    private CookieOptions Cookie(TimeSpan age)=>new(){HttpOnly=true,SameSite=SameSiteMode.Lax,Secure=Request.IsHttps,MaxAge=age};
     [HttpPost("api/auth/login")] public async Task<object> AdminLogin(LoginRequest request){var user=await auth.LoginAsync(request.Email,request.Password,true);Response.Cookies.Append("kinochy_admin",auth.AdminToken(user),Cookie(TimeSpan.FromHours(8)));return new{admin=new{id=user.Id,email=user.Email}};}
     [HttpPost("api/auth/logout")] public object AdminLogout(){Response.Cookies.Delete("kinochy_admin");Response.Cookies.Delete("filmglish_admin");return new{ok=true};}
     [HttpGet("api/auth/me")] public object AdminMe(){var p=tokens.Read(Request.Cookies["kinochy_admin"]??Request.Cookies["filmglish_admin"]);return new{admin=p is null?null:new{id=p.FindFirst("id")?.Value,email=p.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value}};}

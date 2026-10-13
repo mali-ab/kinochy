@@ -24,6 +24,7 @@ export async function api<T = any>(path: string, options: ApiOptions = {}): Prom
     throw error;
   }
 
+  if (response.status === 204) return undefined as T;
   return response.json();
 }
 
@@ -49,11 +50,15 @@ export function apiUpload<T = any>(path: string, { method = 'POST', body, header
 
     request.onload = () => {
       const text = request.responseText || '{}';
-      const body = JSON.parse(text || '{}');
+      let responseBody: unknown = {};
+      try { responseBody = JSON.parse(text); } catch { /* Proxies may return an HTML error page. */ }
       if (request.status >= 200 && request.status < 300) {
-        resolve(body);
+        resolve(responseBody as T);
         return;
       }
+      const body = responseBody && typeof responseBody === 'object'
+        ? responseBody as { message?: string; code?: string; email?: string }
+        : {};
       const error = new ApiError(body.message || `Request failed: ${request.status}`);
       error.code = body.code;
       error.email = body.email;

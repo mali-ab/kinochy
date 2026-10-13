@@ -9,7 +9,6 @@ Kinochy is a movie-based English learning platform with streaming playback, inte
 - Backend: ASP.NET Core 8 Web API
 - Database: PostgreSQL
 - Video playback: HLS.js on the client, with direct video streaming from ASP.NET Core
-- Email verification: Brevo API/SMTP, Gmail SMTP, or generic SMTP
 
 ## Features
 
@@ -18,7 +17,9 @@ Kinochy is a movie-based English learning platform with streaming playback, inte
 - Real-time subtitle overlay plus paused subtitle script
 - Word lookup with translation and pronunciation
 - User signup, login, password reset, and language preferences
+- Free accounts can preview the first 10 minutes of every movie; Premium accounts have full playback access. Admins manage plans and optional expiry dates from the user editor.
 - Admin module for movie upload, editing, deletion, and user management
+- Movie pages show related titles and signed-in user comments. Series pages also show seasons; admins create playable episodes as movie entries, then link them under **Admin → Series movie → Seasons & episodes**.
 
 ## Project Structure
 
@@ -61,8 +62,6 @@ ASPNETCORE_URLS=http://localhost:4000 \
 DATABASE_URL=postgresql://kinochy:change-me@localhost:5432/kinochy \
 CLIENT_ORIGIN=http://localhost:5173 \
 JWT_SECRET=replace-with-a-long-random-secret \
-ADMIN_EMAIL=admin@kinochy.local \
-ADMIN_PASSWORD=replace-with-a-strong-admin-password \
 dotnet run --no-launch-profile
 ```
 
@@ -93,23 +92,12 @@ cd kinochy
 cp .env.example .env
 ```
 
-3. Edit `.env` and set at least these values:
+3. Edit `.env` and set these values:
 
-- `CLIENT_ORIGIN=http://YOUR_DOMAIN_OR_IP:4000`
 - `JWT_SECRET=your-long-random-secret`
 - `POSTGRES_DB=kinochy`
 - `POSTGRES_USER=kinochy`
 - `POSTGRES_PASSWORD=strong-db-password`
-- `ADMIN_EMAIL=admin@your-domain.com`
-- `ADMIN_PASSWORD=strong-admin-password`
-- `DEFAULT_USER_NAME=Example User`
-- `DEFAULT_USER_EMAIL=user@your-domain.com`
-- `DEFAULT_USER_PASSWORD=strong-user-password`
-- `BREVO_API_KEY=your-brevo-api-key`
-- `BREVO_API_URL=https://api.brevo.com/v3/smtp/email`
-- `BREVO_IP_FAMILY=4`
-- `BREVO_SENDER_NAME=Allberdov Allberd`
-- `BREVO_SENDER_EMAIL=allberdovallberd@gmail.com`
 
 4. Build and start:
 
@@ -117,9 +105,12 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-At API startup, Docker Compose seeds an admin account for `/admin` and a verified regular user for the main sign-in page. Their credentials come from `ADMIN_EMAIL`/`ADMIN_PASSWORD` and `DEFAULT_USER_EMAIL`/`DEFAULT_USER_PASSWORD` in `.env`. Set these before the first deployment; the example passwords are public and should not be used on a real server.
+At API startup, the backend creates or refreshes these built-in accounts:
 
-With `SEED_SYNC_PASSWORDS=true` (the Docker Compose default), each startup updates the passwords of existing accounts with those seed email addresses to match `.env`. This also repairs seed accounts left in an existing database volume with older passwords. Set `SEED_SYNC_PASSWORDS=false` to preserve existing passwords, or `SEED_ACCOUNTS=false` to disable account seeding entirely.
+- Admin: `admin@kinochy.local` / `KinochyAdmin@4321!`
+- User: `user@kinochy.local` / `Kinochy@4321!`
+
+The credentials are defined in `backend/Data/AccountSeeder.cs`, not `.env`. Change those constants before a public deployment and rebuild the app.
 
 5. Check status:
 
@@ -141,40 +132,30 @@ Docker volumes keep production data between restarts:
 
 Uploaded movie assets are stored inside the app volume under `/app/storage/uploads`.
 
+Large local HLS bundles can be kept outside the Docker volume in `backend/storage/preloaded/<movie>/`. Add a `movie.json` containing `title` and `playlist`; Compose mounts this directory read-only and startup connects the playlist to the movie with that exact title.
+
 ## Environment Variables
 
 Docker Compose reads `.env` from the project root. For a run without Docker, set the variables in the process environment.
 
-Important variables:
+Variables kept in `.env`:
 
-- `ASPNETCORE_URLS`: API listen address when running without Docker, for example `http://localhost:4000`
-- `APP_PORT`: host port exposed by Docker Compose
-- `APP_BASE_PATH`: public mount path for subpath deployments, for example `/kinochy`
-- `CLIENT_ORIGIN`: allowed browser origin for CORS
 - `JWT_SECRET`: JWT signing secret
-- `UPLOAD_MAX_BYTES`: maximum size for each uploaded file, default `8589934592` bytes
-- Uploaded videos are streamed directly. The ASP.NET backend currently does not transcode uploads or generate HLS segments.
-- `DATABASE_URL`: required PostgreSQL connection string for database-backed API routes
-- `NEXT_PUBLIC_API_URL`: optional frontend API address; defaults to `http://localhost:4000` in development
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: PostgreSQL container settings
-- `NODE_IMAGE`, `POSTGRES_IMAGE`: container image overrides if needed
-- `ADMIN_EMAIL`, `ADMIN_PASSWORD`: seeded admin sign-in at `/admin`
-- `DEFAULT_USER_NAME`, `DEFAULT_USER_EMAIL`, `DEFAULT_USER_PASSWORD`: seeded verified user for the main sign-in page
-- `SEED_ACCOUNTS`, `SEED_SYNC_PASSWORDS`: control startup account seeding and whether configured passwords replace existing seed-account passwords
-- `TRANSLATE_PROVIDER`, `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`: translation service config
-- `EMAIL_PROVIDER`: `brevo`, `gmail`, or `smtp`
-- `BREVO_API_KEY` or `BREVO_SMTP_KEY`: Brevo verification email provider config
-- `BREVO_API_URL`, `BREVO_API_URLS`, `BREVO_TIMEOUT_MS`, `BREVO_IP_FAMILY`: Brevo API endpoint fallback list, timeout, and IP family. Keep `BREVO_IP_FAMILY=4` on servers where IPv6 or Cloudflare routes time out.
-- `BREVO_SMTP_KEY`, `BREVO_SMTP_PASSWORD`, or `SMTP_PASSWORD`: Brevo SMTP key aliases used when API delivery times out or SMTP is preferred
-- `GMAIL_SMTP_USER`, `GMAIL_APP_PASSWORD`: Google/Gmail SMTP verification email config. Use a Google app password, not the normal account password.
-- `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`: generic SMTP verification email config
+- `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`: translation service configuration
+
+Docker uses port `4000`, the root path `/`, an 8 GiB upload limit, PostgreSQL 16 Alpine, and Node.js 22 Alpine as project defaults. `DATABASE_URL` is assembled by Docker Compose from the three PostgreSQL values. When running without Docker, supply `ASPNETCORE_URLS`, `DATABASE_URL`, `CLIENT_ORIGIN`, and `JWT_SECRET` directly to the backend process as shown above.
+
+- Uploaded video files are streamed directly. The ASP.NET backend does not transcode uploads or generate HLS segments.
+- For an adaptive HLS movie, choose **HLS bundle** and upload a ZIP containing `master.m3u8` plus its rendition folders. ZIP paths and playlist references are validated before extraction. A flat `.m3u8` playlist with separately selected media files is also supported.
+- Subtitle uploads accept separate SRT/VTT files or one ZIP bundle. Include `en`/`english` and `ru`/`russian` in filenames, for example `movie.en.srt` and `movie.ru.srt`; archive paths, file count, and extracted size are validated.
+- To convert an existing video into this format, see the [local movie tools](scripts/local_movies/README.md).
+- `NEXT_PUBLIC_API_URL`: optional frontend API address; defaults to `http://localhost:4000` in development
 
 ## Production Notes
 
 - `.env` is intentionally ignored by git and should not be committed.
 - Use a reverse proxy such as Nginx if you want HTTPS and a domain.
-- Set `COOKIE_SECURE=true` when serving behind HTTPS.
-- Set `TRUST_PROXY=true` when running behind Nginx, Caddy, Traefik, or another proxy.
 - Run backups for both Docker volumes if the server will host real user data.
 
 ## Useful Commands
@@ -198,9 +179,7 @@ In VS Code, install the recommended extensions when prompted after opening this 
 
 ## Troubleshooting
 
-- If signup email fails, verify that Brevo transactional sending is enabled and the sender is approved. If the error says Brevo is unreachable, test outbound HTTPS from the server and keep `BREVO_IP_FAMILY=4`.
-- If Docker cannot pull images, try again or override `NODE_IMAGE` and `POSTGRES_IMAGE` in `.env` with registry mirrors reachable from your server.
-- If the browser gets CORS errors, make sure `CLIENT_ORIGIN` exactly matches the URL you open in the browser.
+- If Docker cannot pull images, retry after checking that Docker Hub and Microsoft Container Registry are reachable from the server.
 - If large uploads reset near completion, check the reverse proxy body-size and timeout limits; ASP.NET request-body limits are disabled for the upload API.
 - If media playback buffers, verify the uploaded file exists in `app_storage` and inspect `docker compose logs -f app`.
 - If media uploads work but playback fails, check `docker compose logs -f app` and verify uploaded files exist in `app_storage`.

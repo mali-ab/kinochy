@@ -17,11 +17,15 @@ CREATE TABLE IF NOT EXISTS users (
   verified BOOLEAN NOT NULL DEFAULT false,
   verification_code TEXT,
   verification_expires_at TIMESTAMPTZ,
+  subscription_plan TEXT NOT NULL DEFAULT 'free',
+  subscription_expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'tm';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'free';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS movies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -79,5 +83,30 @@ CREATE TABLE IF NOT EXISTS favorite_movies (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, movie_id)
 );
+
+CREATE TABLE IF NOT EXISTS series_episodes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  series_id UUID NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+  movie_id UUID NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+  season_number INTEGER NOT NULL CHECK (season_number > 0),
+  episode_number INTEGER NOT NULL CHECK (episode_number > 0),
+  title TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (series_id <> movie_id),
+  UNIQUE (series_id, season_number, episode_number),
+  UNIQUE (series_id, movie_id)
+);
+
+CREATE INDEX IF NOT EXISTS series_episodes_series_idx ON series_episodes(series_id, season_number, episode_number);
+
+CREATE TABLE IF NOT EXISTS movie_comments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  movie_id UUID NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  body TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 1000),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS movie_comments_movie_idx ON movie_comments(movie_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS movies_title_idx ON movies USING gin (to_tsvector('english', title || ' ' || coalesce(description, '')));

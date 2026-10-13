@@ -1,4 +1,4 @@
-import { ArrowUpDown, Cast, Check, Expand, Gauge, Grid2x2, Pause, Play, Settings, Volume1, Volume2, VolumeX } from 'lucide-react';
+import { ArrowUpDown, Cast, Check, Crown, Expand, Gauge, Grid2x2, Pause, Play, Settings, Volume1, Volume2, VolumeX } from 'lucide-react';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import { withBasePath } from '../paths';
@@ -6,11 +6,11 @@ import { useLocale } from '../ui/locale.jsx';
 
 const fontMap = {
   Verdana: 'Verdana, Geneva, sans-serif',
-  Museo: 'Inter, Segoe UI, Arial, sans-serif',
+  Museo: '"Avenir Next", "Segoe UI Variable", "Segoe UI", sans-serif',
   'PT Serif': '"Times New Roman", Georgia, serif'
 };
 
-export default function MoviePlayer({ movie, subtitles }) {
+export default function MoviePlayer({ movie, subtitles, access }) {
   const { t } = useLocale();
   const stageRef = useRef(null);
   const videoRef = useRef(null);
@@ -34,6 +34,7 @@ export default function MoviePlayer({ movie, subtitles }) {
   const [playRequested, setPlayRequested] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
+  const [playbackError, setPlaybackError] = useState('');
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [realtimeEnglish, setRealtimeEnglish] = useState(true);
@@ -46,6 +47,9 @@ export default function MoviePlayer({ movie, subtitles }) {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [volume, setVolume] = useState(0.9);
   const [playbackRate, setPlaybackRate] = useState(1);
+  const [qualityLevels, setQualityLevels] = useState([]);
+  const [selectedQuality, setSelectedQuality] = useState(-1);
+  const [previewEnded, setPreviewEnded] = useState(false);
   const [subtitleStyle, setSubtitleStyle] = useState({
     en: 30,
     ru: 25,
@@ -66,6 +70,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     pauseOnHover: false,
     previousReplica: false,
     pauseBetweenLines: false,
+    showOnPause: true,
     pauseScript: true
   });
   const compactPlayer = useCompactPlayer();
@@ -79,11 +84,15 @@ export default function MoviePlayer({ movie, subtitles }) {
   const activeRussian = findCueAtTime(russian, currentTime);
   const paused = !playing;
   const showPausedList = paused && hasStarted && currentTime >= 3 && playerToggles.pauseScript;
-  const liveOverlayActive = Boolean((realtimeEnglish && activeEnglish) || (realtimeRussian && activeRussian));
+  const showLiveSubtitles = playing || playerToggles.showOnPause;
+  const liveOverlayActive = showLiveSubtitles && Boolean((realtimeEnglish && activeEnglish) || (realtimeRussian && activeRussian));
   const fontFamily = fontMap[subtitleStyle.font] || fontMap.Museo;
   const videoSource = useMemo(() => withBasePath(`/media/movies/${movie.id}/video`), [movie.id]);
   const hlsSource = useMemo(() => withBasePath(`/media/movies/${movie.id}/playlist.m3u8`), [movie.id]);
   const prefersHls = Boolean(movie.streaming?.hls);
+  const hasFullAccess = Boolean(access?.hasFullAccess);
+  const previewSeconds = Number(access?.previewSeconds || 600);
+  const playableDuration = hasFullAccess ? duration : Math.min(duration || previewSeconds, previewSeconds);
   const showPlayerLoader = videoLoading && (playing || playRequested);
   const controlsPinned = settingsOpen || playerToolsOpen || volumeOpen;
 
@@ -94,7 +103,11 @@ export default function MoviePlayer({ movie, subtitles }) {
     let disposed = false;
     hlsRef.current = null;
     setVideoLoading(false);
+    setPlaybackError('');
     setPlayRequested(false);
+    setQualityLevels([]);
+    setSelectedQuality(-1);
+    setPreviewEnded(false);
     resumeAppliedRef.current = false;
 
     const loadHls = async () => {
@@ -102,6 +115,7 @@ export default function MoviePlayer({ movie, subtitles }) {
       try {
         ({ default: Hls } = await import('hls.js'));
       } catch {
+        setPlaybackError('HLS playback is unavailable in this browser.');
         return;
       }
       if (disposed) return;
@@ -130,17 +144,26 @@ export default function MoviePlayer({ movie, subtitles }) {
         hlsRef.current = hls;
         hls.loadSource(hlsSource);
         hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          const levels = hls.levels
+            .map((level, index) => ({ index, height: level.height }))
+            .filter((level) => Number.isFinite(level.height) && level.height > 0)
+            .filter((level, index, all) => all.findIndex((candidate) => candidate.height === level.height) === index)
+            .sort((left, right) => right.height - left.height);
+          setQualityLevels(levels);
+        });
         hls.on(Hls.Events.ERROR, (_event, data) => {
           if (!data?.fatal) return;
           hls.destroy();
           hlsRef.current = null;
-          video.src = videoSource;
-          video.load();
+          setPlaybackError('This HLS stream could not be played. Check the playlist and media segments.');
           finishBuffering();
         });
       } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
         video.src = hlsSource;
         video.load();
+      } else {
+        setPlaybackError('HLS playback is unavailable in this browser.');
       }
     };
 
@@ -167,6 +190,10 @@ export default function MoviePlayer({ movie, subtitles }) {
   useEffect(() => {
     if (videoRef.current) videoRef.current.volume = volume;
   }, [volume]);
+
+  useEffect(() => {
+    if (hasFullAccess) setPreviewEnded(false);
+  }, [hasFullAccess]);
 
   useEffect(() => {
     revealControls(controlsPinned);
@@ -229,7 +256,7 @@ export default function MoviePlayer({ movie, subtitles }) {
   useEffect(() => {
     const onKeyDown = (event) => {
       const tag = event.target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || event.target?.isContentEditable) return;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'BUTTON' || tag === 'SELECT' || event.target?.isContentEditable) return;
       if (event.code === 'Space') {
         event.preventDefault();
         revealControls();
@@ -315,7 +342,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     cleanupPreview();
     window.clearTimeout(seekTimerRef.current);
     setPreviewPinnedIndex(null);
-    const next = seekVideo(video, time, play || playing, hlsRef.current);
+    const next = seekVideo(video, hasFullAccess ? time : Math.min(time, previewSeconds), play || playing, hlsRef.current);
     setCurrentTime(next);
     rememberProgress(next, video?.duration);
     if (play) {
@@ -346,7 +373,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     const video = videoRef.current;
     if (!video || !Number.isFinite(value)) return;
     window.clearTimeout(seekTimerRef.current);
-    const next = seekVideo(video, value, true, hlsRef.current);
+    const next = seekVideo(video, hasFullAccess ? value : Math.min(value, previewSeconds), true, hlsRef.current);
     setCurrentTime(next);
     rememberProgress(next, video.duration);
     if (playing || playRequested) beginBuffering(video);
@@ -363,6 +390,15 @@ export default function MoviePlayer({ movie, subtitles }) {
     }
     const request = shell.requestFullscreen?.() || shell.webkitRequestFullscreen?.();
     request?.catch?.(() => {});
+  }
+
+  function changeQuality(levelIndex) {
+    const hls = hlsRef.current;
+    if (!hls) return;
+    // Switch on the next fragment boundary so the current buffer keeps playing.
+    // `currentLevel` flushes the buffer immediately and causes a visible pause.
+    hls.nextLevel = levelIndex;
+    setSelectedQuality(levelIndex);
   }
 
   function closePanels() {
@@ -416,7 +452,7 @@ export default function MoviePlayer({ movie, subtitles }) {
     window.clearTimeout(seekTimerRef.current);
     setPreviewPinnedIndex(null);
     const max = Number.isFinite(video.duration) ? video.duration : duration || 0;
-    const next = Math.min(Math.max(video.currentTime + seconds, 0), max || Number.MAX_SAFE_INTEGER);
+    const next = Math.min(Math.max(video.currentTime + seconds, 0), hasFullAccess ? (max || Number.MAX_SAFE_INTEGER) : Math.min(max || previewSeconds, previewSeconds));
     const remembered = seekVideo(video, next, true, hlsRef.current);
     setCurrentTime(remembered);
     rememberProgress(remembered, video.duration);
@@ -429,7 +465,7 @@ export default function MoviePlayer({ movie, subtitles }) {
   }
 
   function handleStagePointerUp(event) {
-    if (event.target?.closest?.('.paused-subtitles, .live-subtitles, .word-card, .player-loader, button, input, select')) return;
+    if (event.target?.closest?.('.paused-subtitles, .live-subtitles, .word-card, .player-loader, .subscription-paywall, button, input, select, a')) return;
     event.preventDefault();
     lastStageToggleRef.current = Date.now();
     revealControls();
@@ -452,8 +488,17 @@ export default function MoviePlayer({ movie, subtitles }) {
 
   function handleTimeUpdate(event) {
     const next = event.currentTarget.currentTime;
+    if (!hasFullAccess && next >= previewSeconds) {
+      event.currentTarget.pause();
+      setCurrentTime(previewSeconds);
+      setPreviewEnded(true);
+      return;
+    }
     const now = performance.now();
     if (now - lastTimeUiRef.current < 180 && Math.abs(next - currentTime) < 0.35) return;
+    if (playerToggles.pauseBetweenLines && playing && !event.currentTarget.seeking && activeEnglish && currentTime < activeEnglish.end && next >= activeEnglish.end) {
+      event.currentTarget.pause();
+    }
     lastTimeUiRef.current = now;
     setCurrentTime(next);
     rememberProgress(next, event.currentTarget.duration);
@@ -670,7 +715,6 @@ export default function MoviePlayer({ movie, subtitles }) {
           ref={videoRef}
           playsInline
           preload="metadata"
-          disableRemotePlayback
           controlsList="nodownload noplaybackrate"
           onLoadStart={(event) => {
             if (!event.currentTarget.paused) beginBuffering(event.currentTarget);
@@ -688,6 +732,7 @@ export default function MoviePlayer({ movie, subtitles }) {
             clearPlaybackTimers();
             setPlayRequested(false);
             setVideoLoading(false);
+            setPlaybackError('This video could not be played. Check its format and media files.');
           }}
           onCanPlay={finishBuffering}
           onCanPlayThrough={finishBuffering}
@@ -705,6 +750,7 @@ export default function MoviePlayer({ movie, subtitles }) {
           }}
           onPlaying={() => {
             clearPlaybackTimers();
+            setPlaybackError('');
             setPlaying(true);
             setPlayRequested(false);
             setVideoLoading(false);
@@ -718,6 +764,13 @@ export default function MoviePlayer({ movie, subtitles }) {
           onPause={() => {
             clearPlaybackTimers();
             saveMovieProgress(movie.id, videoRef.current?.currentTime, videoRef.current?.duration);
+            if (playerToggles.previousReplica && videoRef.current && english.length) {
+              const previous = english.findLast((cue) => cue.start < videoRef.current.currentTime - 0.4);
+              if (previous) {
+                videoRef.current.currentTime = previous.start;
+                setCurrentTime(previous.start);
+              }
+            }
             setPlaying(false);
             setPlayRequested(false);
             setVideoLoading(false);
@@ -727,9 +780,21 @@ export default function MoviePlayer({ movie, subtitles }) {
           onTimeUpdate={handleTimeUpdate}
         />
 
+        {!hasFullAccess && !previewEnded ? <div className="free-preview-chip"><Crown size={14} /> Free preview · {formatTime(Math.max(0, previewSeconds - currentTime))} left</div> : null}
+
         {showPlayerLoader ? (
           <div className="player-loader" aria-label="Loading movie">
             <span />
+          </div>
+        ) : null}
+        {playbackError ? <div className="player-playback-error" role="alert">{playbackError}</div> : null}
+        {previewEnded ? (
+          <div className="subscription-paywall" role="dialog" aria-modal="true" aria-label="Free preview ended">
+            <span className="subscription-paywall-icon"><Crown size={28} /></span>
+            <p>Free preview ended</p>
+            <h3>Continue watching with Kinochy Premium</h3>
+            <small>You watched the free 10-minute preview. Premium unlocks every movie without limits.</small>
+            <a href={withBasePath('/subscription')}>View subscription</a>
           </div>
         ) : null}
 
@@ -761,8 +826,15 @@ export default function MoviePlayer({ movie, subtitles }) {
           />
         ) : null}
 
-        {(realtimeEnglish && activeEnglish) || (realtimeRussian && activeRussian) ? (
-          <div ref={liveSubtitleRef} className={`live-subtitles ${showPausedList ? 'over-paused-list' : ''}`} onClick={handleLiveSubtitleClick}>
+        {showLiveSubtitles && ((realtimeEnglish && activeEnglish) || (realtimeRussian && activeRussian)) ? (
+          <div
+            ref={liveSubtitleRef}
+            className={`live-subtitles ${showPausedList ? 'over-paused-list' : ''}`}
+            onClick={handleLiveSubtitleClick}
+            onPointerEnter={(event) => {
+              if (event.pointerType === 'mouse' && playerToggles.pauseOnHover && playing) videoRef.current?.pause();
+            }}
+          >
             <div className="live-subtitles-inner">
               {realtimeEnglish && activeEnglish ? (
                 <p className="live-en">
@@ -801,9 +873,9 @@ export default function MoviePlayer({ movie, subtitles }) {
         <input
           type="range"
           min="0"
-          max={Number.isFinite(duration) ? duration : 0}
+          max={Number.isFinite(playableDuration) ? playableDuration : 0}
           step="0.01"
-          value={Math.min(currentTime, Number.isFinite(duration) ? duration : currentTime)}
+          value={Math.min(currentTime, Number.isFinite(playableDuration) ? playableDuration : currentTime)}
           onInput={scrub}
           onChange={commitScrub}
           onPointerUp={(event) => commitScrubValue(Number(event.currentTarget.value))}
@@ -813,7 +885,7 @@ export default function MoviePlayer({ movie, subtitles }) {
               commitScrubValue(Number(event.currentTarget.value));
             }
           }}
-          style={{ '--progress': `${duration ? (currentTime / duration) * 100 : 0}%` }}
+          style={{ '--progress': `${playableDuration ? (currentTime / playableDuration) * 100 : 0}%` }}
           aria-label={t('player_seek')}
         />
       </div>
@@ -837,13 +909,22 @@ export default function MoviePlayer({ movie, subtitles }) {
             -
           </button>
         </div>
-        <button className={settingsOpen ? 'active' : ''} title={t('player_subtitle_style')} onClick={() => setSettingsOpen((value) => !value)}>
+        <button
+          className={settingsOpen ? 'active' : ''}
+          title={t('player_subtitle_style')}
+          aria-label={t('player_subtitle_style')}
+          aria-expanded={settingsOpen}
+          onClick={() => {
+            setPlayerToolsOpen(false);
+            setSettingsOpen((value) => !value);
+          }}
+        >
           Aa
         </button>
-        <button className={realtimeEnglish ? 'active' : ''} onClick={() => setRealtimeEnglish((value) => !value)}>
+        <button className={realtimeEnglish ? 'active' : ''} aria-label={t('admin_subtitle_en')} aria-pressed={realtimeEnglish} onClick={() => setRealtimeEnglish((value) => !value)}>
           EN
         </button>
-        <button className={realtimeRussian ? 'active' : ''} onClick={() => setRealtimeRussian((value) => !value)}>
+        <button className={realtimeRussian ? 'active' : ''} aria-label={t('admin_subtitle_ru')} aria-pressed={realtimeRussian} onClick={() => setRealtimeRussian((value) => !value)} disabled={!russian.length}>
           RU
         </button>
         <button className="playbar" onClick={togglePlay} aria-label={playing || playRequested ? t('player_pause') || 'Pause' : t('player_play') || 'Play'}>
@@ -852,10 +933,27 @@ export default function MoviePlayer({ movie, subtitles }) {
         <span className="time-readout">
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
-        <button className={playerToolsOpen ? 'active' : ''} title={t('player_tools')} onClick={() => setPlayerToolsOpen((value) => !value)}>
+        <button
+          className={playerToolsOpen ? 'active' : ''}
+          title={t('player_tools')}
+          aria-label={t('player_tools')}
+          aria-expanded={playerToolsOpen}
+          onClick={() => {
+            setSettingsOpen(false);
+            setPlayerToolsOpen((value) => !value);
+          }}
+        >
           <Settings size={22} />
         </button>
-        <button className="cast-button" title={t('player_cast')}>
+        <button
+          className="cast-button"
+          title={t('player_cast')}
+          onClick={() => {
+            const video = videoRef.current;
+            if (video?.remote?.prompt) video.remote.prompt().catch(() => {});
+            else video?.webkitShowPlaybackTargetPicker?.();
+          }}
+        >
           <Cast size={21} />
         </button>
         <div className={`volume-control ${volumeOpen ? 'open' : ''}`}>
@@ -888,6 +986,9 @@ export default function MoviePlayer({ movie, subtitles }) {
           setToggles={setPlayerToggles}
           playbackRate={playbackRate}
           setPlaybackRate={setPlaybackRate}
+          qualityLevels={qualityLevels}
+          selectedQuality={selectedQuality}
+          setQuality={changeQuality}
         />
       ) : null}
     </section>
@@ -1178,7 +1279,7 @@ function SubtitleSettings({ style, setStyle }) {
   );
 }
 
-function PlayerToolsPanel({ toggles, setToggles, playbackRate, setPlaybackRate }) {
+function PlayerToolsPanel({ toggles, setToggles, playbackRate, setPlaybackRate, qualityLevels, selectedQuality, setQuality }) {
   const { t } = useLocale();
   function toggle(key) {
     setToggles((value) => ({ ...value, [key]: !value[key] }));
@@ -1188,6 +1289,10 @@ function PlayerToolsPanel({ toggles, setToggles, playbackRate, setPlaybackRate }
 
   return (
     <div className="player-tools-panel" onClick={(event) => event.stopPropagation()}>
+      <ToggleRow label={t('player_pause_on_hover')} value={toggles.pauseOnHover} onChange={() => toggle('pauseOnHover')} />
+      <ToggleRow label={t('player_previous_line')} value={toggles.previousReplica} onChange={() => toggle('previousReplica')} />
+      <ToggleRow label={t('player_pause_between')} value={toggles.pauseBetweenLines} onChange={() => toggle('pauseBetweenLines')} />
+      <ToggleRow label={t('player_show_on_pause')} value={toggles.showOnPause} onChange={() => toggle('showOnPause')} />
       <ToggleRow label={t('player_scenario_on_pause')} value={toggles.pauseScript} onChange={() => toggle('pauseScript')} />
       <hr />
       <div className="tool-title">{t('player_playback_speed')}</div>
@@ -1198,6 +1303,26 @@ function PlayerToolsPanel({ toggles, setToggles, playbackRate, setPlaybackRate }
           </button>
         ))}
       </div>
+      {qualityLevels.length ? (
+        <>
+          <hr />
+          <div className="quality-heading"><div className="tool-title">Quality</div><span>HLS</span></div>
+          <div className="quality-pills">
+            <button className={selectedQuality === -1 ? 'active' : ''} onClick={() => setQuality(-1)}>
+              <span><strong>Auto</strong><small>Best for your connection</small></span>
+              {selectedQuality === -1 ? <Check size={15} /> : null}
+            </button>
+            {qualityLevels.map((level) => (
+              <button key={level.index} className={selectedQuality === level.index ? 'active' : ''} onClick={() => setQuality(level.index)}>
+                <span><strong>{level.height}p</strong><small>{level.height >= 720 ? 'HD' : level.height >= 480 ? 'SD' : 'Data saver'}</small></span>
+                {selectedQuality === level.index ? <Check size={15} /> : null}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+      <hr />
+      <div className="tool-shortcuts">{t('player_shortcuts')} <span>Space · ← / →</span></div>
     </div>
   );
 }
@@ -1206,7 +1331,7 @@ function ToggleRow({ label, value, onChange }) {
   return (
     <label className="tool-row">
       <span>{label}</span>
-      <button type="button" className={`tool-toggle ${value ? 'on' : ''}`} onClick={onChange} aria-pressed={value}>
+      <button type="button" className={`tool-toggle ${value ? 'on' : ''}`} onClick={onChange} aria-label={label} aria-pressed={value}>
         <i />
       </button>
     </label>

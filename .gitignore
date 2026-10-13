@@ -6,5 +6,8 @@ backend/obj/
 backend/wwwroot/
 .env
 backend/storage/uploads/
+backend/storage/preloaded/
 *.log
 *.tar
+puzzle_movies_output/
+internet_archive_output/

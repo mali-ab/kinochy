@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   icons: { icon: '/kinochy_favicon.png' }
 };
 
-export const viewport: Viewport = { colorScheme: 'dark', themeColor: '#171919' };
+export const viewport: Viewport = { colorScheme: 'dark', themeColor: '#0F172A' };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return <html lang="en"><body>{children}</body></html>;

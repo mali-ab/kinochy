@@ -10,10 +10,10 @@ public sealed class UserService(Database database)
     {
         if (language is not ("tm" or "ru" or "en")) throw new ApiException("Unsupported language");
         await using var connection = await database.OpenAsync();
-        await using var command = connection.Command("UPDATE users SET language=@language WHERE id=@id RETURNING id,username,email,role,language", ("id", userId), ("language", language));
+        await using var command = connection.Command("UPDATE users SET language=@language WHERE id=@id RETURNING id,username,email,role,language,subscription_plan,subscription_expires_at", ("id", userId), ("language", language));
         await using var reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync()) throw new ApiException("User not found", 404);
-        return new(reader.GetGuid(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4));
+        return new(reader.GetGuid(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.IsDBNull(6)?null:reader.GetDateTime(6));
     }
 
     public async Task<List<object>> VocabularyAsync(Guid userId)

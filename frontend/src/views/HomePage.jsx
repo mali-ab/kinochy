@@ -1,4 +1,4 @@
-import { Heart, Star } from 'lucide-react';
+import { ArrowUpRight, Heart, Play, Sparkles, Star } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, moviePosterFallback } from '../api';
@@ -65,11 +65,40 @@ export default function HomePage() {
   }
 
   const emptyLabel = category === 'Series' ? t('empty_series') : category === 'Animation' ? t('empty_animations') : t('empty_movies');
+  const featured = !search ? catalog.find((movie) => movie.coverUrl) || catalog[0] : null;
+  const categoryLabel = category === 'Series' ? t('nav_series') : category === 'Animation' ? t('nav_animations') : t('nav_movies');
+  const featuredGenre = featured?.genres?.[0] || featured?.genre;
 
   return (
     <section className="catalog-page">
+      {featured ? (
+        <div className="catalog-feature" style={!featured.coverUrl ? { background: moviePosterFallback(featured) } : undefined}>
+          {featured.coverUrl ? <img className="catalog-feature-image" src={withBasePath(featured.coverUrl)} alt="" /> : null}
+          <div className="catalog-feature-copy">
+            <span className="feature-kicker"><Sparkles size={15} /> {t('catalog_spotlight')}</span>
+            <div className="feature-meta">
+              {featured.year ? <span>{featured.year}</span> : null}
+              {featuredGenre ? <span>{translateGenre(locale, featuredGenre)}</span> : null}
+              <span>{featured.type === 'Animation' ? t('movie_type_animation') : featured.type === 'Series' ? t('movie_type_series') : t('movie_type_movie')}</span>
+            </div>
+            <h1>{featured.title}</h1>
+            {featured.description ? <p>{featured.description}</p> : null}
+            <Link className="feature-play" to={`/movies/${featured.slug}`}><Play size={18} fill="currentColor" /> {t('catalog_watch')}</Link>
+          </div>
+          {!featured.coverUrl ? <div className="feature-monogram" aria-hidden="true">{featured.title?.charAt(0)}</div> : null}
+        </div>
+      ) : null}
+
+      <div className="catalog-heading">
+        <div>
+          <span className="catalog-eyebrow">{t('catalog_library')}</span>
+          <h2>{search ? t('catalog_results') : categoryLabel}</h2>
+        </div>
+        {!loading ? <span className="catalog-count">{catalog.length} {t('catalog_titles')}</span> : null}
+      </div>
+
       <div className="filters">
-        <select className="filter-select genre-filter" name="genre" value={filters.genre} onChange={updateFilter}>
+        <select className="filter-select genre-filter" name="genre" value={filters.genre} onChange={updateFilter} aria-label={t('filters_genre')}>
           <option value="all">{t('filters_genre')}</option>
           {filterOptions.genres.map((genre) => (
             <option key={genre} value={genre}>
@@ -77,7 +106,7 @@ export default function HomePage() {
             </option>
           ))}
         </select>
-        <select className="filter-select year-filter" name="year" value={filters.year} onChange={updateFilter}>
+        <select className="filter-select year-filter" name="year" value={filters.year} onChange={updateFilter} aria-label={t('filters_year')}>
           <option value="all">{t('filters_year')}</option>
           {filterOptions.years.map((year) => (
             <option key={year} value={year}>
@@ -85,7 +114,7 @@ export default function HomePage() {
             </option>
           ))}
         </select>
-        <select className="filter-select sort-button" name="sort" value={filters.sort} onChange={updateFilter}>
+        <select className="filter-select sort-button" name="sort" value={filters.sort} onChange={updateFilter} aria-label={t('catalog_sort')}>
           <option value="popular">{t('filters_popular')}</option>
           <option value="rating">{t('filters_rating')}</option>
           <option value="new">{t('filters_newest')}</option>
@@ -129,8 +158,13 @@ export default function HomePage() {
                   <strong>{movie.title}</strong>
                 </div>
               ) : null}
+              <span className="poster-hover"><Play size={20} fill="currentColor" /></span>
             </div>
-            <strong className="movie-title">{movie.title}</strong>
+            <div className="movie-card-copy">
+              <strong className="movie-title">{movie.title}</strong>
+              <span className="movie-card-details">{movie.year || '—'} <span>·</span> {movie.genres?.[0] ? translateGenre(locale, movie.genres[0]) : movie.genre || t('movie_type_movie')}</span>
+              <ArrowUpRight className="movie-card-arrow" size={17} aria-hidden="true" />
+            </div>
           </Link>
         ))}
       </div>

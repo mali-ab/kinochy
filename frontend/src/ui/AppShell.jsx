@@ -1,4 +1,4 @@
-import { LogOut, Search } from 'lucide-react';
+import { Crown, LayoutDashboard, LogOut, Search } from 'lucide-react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { api } from '../api';
@@ -9,6 +9,7 @@ import AuthPage from '../views/AuthPage.jsx';
 export default function AppShell() {
   const [search, setSearch] = useState('');
   const [user, setUser] = useState(null);
+  const [admin, setAdmin] = useState(null);
   const [checking, setChecking] = useState(true);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [locale, setLocale] = useState(() => window.localStorage.getItem('kinochy_locale') || 'tm');
@@ -27,9 +28,14 @@ export default function AppShell() {
 
   useEffect(() => {
     setChecking(true);
-    api('/api/users/me')
-      .then((data) => setUser(data.user))
-      .catch(() => setUser(null))
+    Promise.all([
+      api('/api/users/me').then((data) => data.user).catch(() => null),
+      api('/api/auth/me').then((data) => data.admin).catch(() => null)
+    ])
+      .then(([currentUser, currentAdmin]) => {
+        setUser(currentUser);
+        setAdmin(currentAdmin);
+      })
       .finally(() => setChecking(false));
   }, []);
 
@@ -101,12 +107,23 @@ export default function AppShell() {
                 </select>
               </div>
               <div className="top-actions">
+                {admin ? (
+                  <Link className="admin-route-link" to="/admin">
+                    <LayoutDashboard size={17} /> {tr('nav_admin')}
+                  </Link>
+                ) : null}
+                <Link className={`subscription-nav ${user.subscription?.hasFullAccess ? 'premium' : ''}`} to="/subscription"><Crown size={16} /> {user.subscription?.hasFullAccess ? 'Premium' : 'Free'}</Link>
                 <span className="username-pill">{user?.username || user?.email}</span>
                 <button className="logout-button" onClick={() => setConfirmLogout(true)} aria-label={tr('logout_title')}>
                   <LogOut size={18} />
                 </button>
               </div>
             </>
+          ) : null}
+          {admin && !user ? (
+            <Link className="admin-route-link" to="/admin">
+              <LayoutDashboard size={17} /> {tr('nav_admin')}
+            </Link>
           ) : null}
         </header>
 

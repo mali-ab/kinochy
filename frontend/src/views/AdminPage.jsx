@@ -1,9 +1,10 @@
-import { Edit3, Film, Image, Lock, LogOut, Plus, Save, Trash2, Upload, Users } from 'lucide-react';
+import { ArrowLeft, Edit3, Film, Image, Lock, LogOut, Plus, Save, Trash2, Upload, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { api, apiUpload, moviePosterFallback } from '../api';
 import { withBasePath } from '../paths';
 import MoviePlayer from '../player/MoviePlayer.jsx';
+import { normalizeSubtitleCues } from '../player/subtitleCues.js';
 import { translateGenre, useLocale } from '../ui/locale.jsx';
 
 const initialMovieForm = {
@@ -50,7 +51,9 @@ const initialUserForm = {
   username: '',
   email: '',
   password: '',
-  role: 'user'
+  role: 'user',
+  subscriptionPlan: 'free',
+  subscriptionExpiresAt: ''
 };
 
 function cloneMovieForm(source = initialMovieForm) {
@@ -111,6 +114,7 @@ function LoginForm({ onLogin }) {
         <input value={password} onChange={(event) => setPassword(event.target.value)} placeholder={t('admin_password_hint')} type="password" autoComplete="current-password" />
         {error ? <p className="form-error">{error}</p> : null}
         <button className="primary">{t('login')}</button>
+        <Link className="admin-back-link" to="/"><ArrowLeft size={16} /> {t('nav_back_to_site')}</Link>
       </form>
     </section>
   );
@@ -147,18 +151,21 @@ function AdminDashboard({ admin, onLogout }) {
             <strong>Kinochy Admin</strong>
           </span>
         </Link>
-        <button
-          onClick={() =>
-            requestConfirm({
-              title: 'Log out?',
-              body: 'This will close your admin session.',
-              actionLabel: t('admin_logout'),
-              onConfirm: logout
-            })
-          }
-        >
-          <LogOut size={18} /> {t('admin_logout')}
-        </button>
+        <div className="admin-head-actions">
+          <Link className="admin-back-link" to="/"><ArrowLeft size={17} /> {t('nav_back_to_site')}</Link>
+          <button
+            onClick={() =>
+              requestConfirm({
+                title: 'Log out?',
+                body: 'This will close your admin session.',
+                actionLabel: t('admin_logout'),
+                onConfirm: logout
+              })
+            }
+          >
+            <LogOut size={18} /> {t('admin_logout')}
+          </button>
+        </div>
       </div>
 
       <div className="admin-tabs">
@@ -250,7 +257,7 @@ function AdminMovieDetail({ requestConfirm }) {
         ]);
         if (!active) return;
         setMovie(movieData);
-        setSubtitles({ en, ru });
+        setSubtitles({ en: normalizeSubtitleCues(en), ru: normalizeSubtitleCues(ru) });
       })
       .finally(() => active && setLoading(false));
     return () => {
@@ -304,9 +311,66 @@ function AdminMovieDetail({ requestConfirm }) {
           </dl>
         </div>
       </div>
-      <MoviePlayer movie={movie} subtitles={subtitles} />
+      <MoviePlayer movie={movie} subtitles={subtitles} access={{ hasFullAccess: true }} />
+      {movie.type === 'Series' ? <AdminSeriesEpisodes movie={movie} /> : null}
     </div>
   );
+}
+
+function AdminSeriesEpisodes({ movie }) {
+  const [seasons, setSeasons] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [form, setForm] = useState({ movieId: '', seasonNumber: '1', episodeNumber: '1', title: '' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api(`/api/movies/${movie.slug}/seasons`).then((data) => setSeasons(Array.isArray(data) ? data : [])).catch(() => setSeasons([]));
+    api('/api/movies?search=').then((data) => setCatalog(Array.isArray(data) ? data.filter((item) => item.id !== movie.id) : [])).catch(() => setCatalog([]));
+  }, [movie.id, movie.slug]);
+
+  async function addEpisode(event) {
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const data = await api(`/api/admin/series/${movie.id}/episodes`, {
+        method: 'POST',
+        body: JSON.stringify({ movieId: form.movieId, seasonNumber: Number(form.seasonNumber), episodeNumber: Number(form.episodeNumber), title: form.title || null })
+      });
+      setSeasons(data);
+      setForm((current) => ({ ...current, movieId: '', episodeNumber: String(Number(current.episodeNumber) + 1), title: '' }));
+    } catch (issue) {
+      setError(issue.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeEpisode(id) {
+    setError('');
+    try {
+      await api(`/api/admin/series/${movie.id}/episodes/${id}`, { method: 'DELETE' });
+      const data = await api(`/api/movies/${movie.slug}/seasons`);
+      setSeasons(data);
+    } catch (issue) {
+      setError(issue.message);
+    }
+  }
+
+  return <section className="admin-series-panel">
+    <h3>Seasons & episodes</h3>
+    <p>Add each playable episode as a movie first, then link it to this series.</p>
+    <form onSubmit={addEpisode}>
+      <label>Season<input type="number" min="1" max="100" required value={form.seasonNumber} onChange={(event) => setForm((current) => ({ ...current, seasonNumber: event.target.value }))} /></label>
+      <label>Episode<input type="number" min="1" max="1000" required value={form.episodeNumber} onChange={(event) => setForm((current) => ({ ...current, episodeNumber: event.target.value }))} /></label>
+      <label>Movie<select required value={form.movieId} onChange={(event) => setForm((current) => ({ ...current, movieId: event.target.value }))}><option value="">Choose a movie</option>{catalog.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
+      <label>Episode title (optional)<input maxLength="200" value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} /></label>
+      <button className="primary" disabled={busy || !form.movieId}><Plus size={16} /> Add episode</button>
+    </form>
+    {error ? <p className="form-error" role="alert">{error}</p> : null}
+    {seasons.map((season) => <div className="admin-season" key={season.number}><h4>Season {season.number}</h4>{season.episodes.map((episode) => <div key={episode.id}><span>{episode.episodeNumber}. {episode.title}</span><button type="button" onClick={() => removeEpisode(episode.id)} aria-label={`Remove ${episode.title}`}><Trash2 size={15} /> Remove</button></div>)}</div>)}
+  </section>;
 }
 
 function AdminMovieEditor() {
@@ -341,7 +405,9 @@ function AdminMovieEditor() {
 
 function MovieEditor({ movie, genres, onCancel, onSaved }) {
   const [form, setForm] = useState(() => cloneMovieForm(movie ? movieToForm(movie) : initialMovieForm));
+  const [sourceType, setSourceType] = useState(movie?.streaming?.hls ? 'hls' : 'video');
   const [files, setFiles] = useState({});
+  const [hlsFiles, setHlsFiles] = useState([]);
   const [coverPreview, setCoverPreview] = useState(movie?.coverUrl ? withBasePath(movie.coverUrl) : '');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({});
@@ -380,6 +446,9 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
     event.target.value = '';
     if (!file) return;
     setFiles((value) => ({ ...value, [event.target.name]: file }));
+    if (event.target.name === 'video' && file.name.toLowerCase().endsWith('.zip')) setHlsFiles([]);
+    if (event.target.name === 'subtitleZip') setFiles((value) => ({ ...value, subtitleZip: file, subtitleEn: null, subtitleRu: null }));
+    if (event.target.name === 'subtitleEn' || event.target.name === 'subtitleRu') setFiles((value) => ({ ...value, [event.target.name]: file, subtitleZip: null }));
     setProgress((value) => ({ ...value, [event.target.name]: 0 }));
   }
 
@@ -388,16 +457,22 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
     setProgress((value) => ({ ...value, [key]: 0 }));
   }
 
+  function changeSource(type) {
+    setSourceType(type);
+    setFiles((value) => ({ ...value, video: null }));
+    setHlsFiles([]);
+    setProgress({});
+    setError('');
+  }
+
   async function submit(event) {
     event.preventDefault();
     setBusy(true);
     setError('');
     setProgress({});
     const missingFiles = [];
-    if (!files.video && !currentStatus.video) missingFiles.push(t('admin_movie_file'));
-    if (!files.cover && !currentStatus.cover) missingFiles.push(t('admin_cover_image'));
-    if (!files.subtitleEn && !currentStatus.subtitleEn) missingFiles.push(t('admin_subtitle_en'));
-    if (!files.subtitleRu && !currentStatus.subtitleRu) missingFiles.push(t('admin_subtitle_ru'));
+    if (!files.video && (!currentStatus.video || Boolean(movie?.streaming?.hls) !== (sourceType === 'hls'))) missingFiles.push(sourceType === 'hls' ? 'HLS ZIP or M3U8 playlist' : t('admin_movie_file'));
+    if (sourceType === 'hls' && files.video && !files.video.name.toLowerCase().endsWith('.zip') && hlsFiles.length === 0) missingFiles.push('HLS segment files');
     if (missingFiles.length) {
       setBusy(false);
       setError(`Please choose: ${missingFiles.join(', ')}`);
@@ -411,12 +486,13 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
       body.append(key, key === 'genres' ? JSON.stringify(value) : value);
     });
     Object.entries(files).forEach(([key, file]) => file && body.append(key, file));
+    if (sourceType === 'hls' && !files.video?.name.toLowerCase().endsWith('.zip')) hlsFiles.forEach((file) => body.append('hlsFiles', file));
 
     try {
       const saved = await apiUpload(movie ? `/api/admin/movies/${movie.id}` : '/api/admin/movies', {
         method: movie ? 'PATCH' : 'POST',
         body,
-        onProgress: (value) => setProgress(getPerFileProgress(value, files))
+        onProgress: (value) => setProgress(getPerFileProgress(value, { ...files, hlsFiles }))
       });
       onSaved(saved);
     } catch (err) {
@@ -428,13 +504,16 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
 
   const currentFiles = movie?.fileNames || {};
   const currentStatus = movie?.fileStatus || {};
+  const currentSourceMatches = Boolean(movie?.streaming?.hls) === (sourceType === 'hls');
+  const hlsSize = hlsFiles.reduce((total, file) => total + file.size, 0);
 
   return (
     <form className="admin-form" onSubmit={submit}>
-      <div className="admin-list-head">
-        <h2>{movie ? 'Edit movie' : t('admin_upload_movie')}</h2>
+      <div className="admin-list-head admin-editor-heading">
+        <div><span className="admin-editor-eyebrow">Kinochy studio / Movie library</span><h2>{movie ? 'Edit movie' : 'Add a movie'}</h2><p>Set up the details, choose a playback source, then publish.</p></div>
         <button type="button" onClick={onCancel}>Cancel</button>
       </div>
+      <div className="admin-editor-section-head"><span className="admin-editor-step">01</span><div><h3>Movie details</h3><p>Help viewers find the right film and language level.</p></div></div>
       <div className="form-grid">
         <label>{t('admin_title_label')}<input name="title" required value={form.title} onChange={updateField} /></label>
         <label>{t('admin_original_title')}<input name="originalTitle" value={form.originalTitle} onChange={updateField} /></label>
@@ -447,15 +526,26 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
         <label className="wide">{t('admin_description')}<textarea name="description" rows="5" value={form.description} onChange={updateField} /></label>
       </div>
 
+      <div className="admin-editor-section-head"><span className="admin-editor-step">02</span><div><h3>Movie bundle</h3><p>Choose a ready video or upload one ZIP containing the complete adaptive HLS folder tree.</p></div></div>
+      <div className="source-switch" role="group" aria-label="Playback source">
+        <button type="button" className={sourceType === 'video' ? 'active' : ''} onClick={() => changeSource('video')} aria-pressed={sourceType === 'video'}><Film size={18} /><span><strong>Video file</strong><small>MP4, WebM or MKV</small></span></button>
+        <button type="button" className={sourceType === 'hls' ? 'active' : ''} onClick={() => changeSource('hls')} aria-pressed={sourceType === 'hls'}><Upload size={18} /><span><strong>HLS bundle</strong><small>ZIP or M3U8 + segments</small></span></button>
+      </div>
+      {sourceType === 'hls' ? <p className="source-note bundle-note"><strong>Recommended ZIP structure:</strong> master.m3u8 at the root, with v0, v1 and v2 rendition folders. A single containing folder is also accepted. Keep subtitles in their own ZIP below.</p> : <p className="source-note">MP4 with browser-compatible codecs is recommended. The server streams the file as uploaded; it does not transcode it.</p>}
       <div className="upload-grid">
-        <FileBox icon={<Film />} name="video" label={t('admin_movie_file')} accept="video/*,.ts,.m3u8,.mkv" required={!currentStatus.video} file={files.video} current={currentFiles.video} progress={progress.video} onChange={updateFile} onRemove={() => removeFile('video')} />
-        <FileBox icon={<Image />} name="cover" label={t('admin_cover_image')} accept="image/*" required={!currentStatus.cover} file={files.cover} current={currentFiles.cover} preview={coverPreview} progress={progress.cover} onChange={updateFile} onRemove={() => removeFile('cover')} />
-        <FileBox icon={<Upload />} name="subtitleEn" label={t('admin_subtitle_en')} accept=".srt" required={!currentStatus.subtitleEn} file={files.subtitleEn} current={currentFiles.subtitleEn} progress={progress.subtitleEn} onChange={updateFile} onRemove={() => removeFile('subtitleEn')} />
-        <FileBox icon={<Upload />} name="subtitleRu" label={t('admin_subtitle_ru')} accept=".srt" required={!currentStatus.subtitleRu} file={files.subtitleRu} current={currentFiles.subtitleRu} progress={progress.subtitleRu} onChange={updateFile} onRemove={() => removeFile('subtitleRu')} />
+        <FileBox icon={<Film />} name="video" label={sourceType === 'hls' ? 'HLS ZIP or main M3U8' : t('admin_movie_file')} accept={sourceType === 'hls' ? '.zip,.m3u8,application/zip,application/vnd.apple.mpegurl' : 'video/mp4,video/webm,video/x-matroska,.mp4,.webm,.mkv'} required={!currentStatus.video || !currentSourceMatches} file={files.video} current={currentSourceMatches ? currentFiles.video : null} progress={progress.video} onChange={updateFile} onRemove={() => removeFile('video')} />
+        {sourceType === 'hls' && !files.video?.name.toLowerCase().endsWith('.zip') ? <div className="hls-file-box"><label htmlFor="hls-files"><Upload size={22} /><span><strong>HLS media files</strong><small>{hlsFiles.length ? `${hlsFiles.length} files · ${formatFileSize(hlsSize)}` : 'Choose all segments and companion playlists'}</small></span></label><input id="hls-files" type="file" multiple accept=".ts,.m4s,.mp4,.aac,.mp3,.vtt,.key,.m3u8" onChange={(event) => { setHlsFiles(Array.from(event.target.files)); event.target.value = ''; }} />{hlsFiles.length ? <div className="hls-file-summary"><span>{hlsFiles.slice(0, 3).map((file) => file.name).join(' · ')}{hlsFiles.length > 3 ? ` · +${hlsFiles.length - 3} more` : ''}</span><button type="button" onClick={() => setHlsFiles([])}>Clear</button></div> : null}{typeof progress.hlsFiles === 'number' && progress.hlsFiles > 0 ? <Progress value={progress.hlsFiles} /> : null}</div> : null}
+      </div>
+
+      <div className="admin-editor-section-head"><span className="admin-editor-step">03</span><div><h3>Artwork & subtitle bundle</h3><p>Upload one subtitle ZIP for both languages, or select the files separately.</p></div></div>
+      <div className="upload-grid">
+        <FileBox icon={<Image />} name="cover" label={t('admin_cover_image')} accept="image/*" file={files.cover} current={currentFiles.cover} preview={coverPreview} progress={progress.cover} onChange={updateFile} onRemove={() => removeFile('cover')} />
+        <div className="subtitle-bundle-upload"><FileBox icon={<Upload />} name="subtitleZip" label="Subtitle ZIP · EN + RU" accept=".zip,application/zip" file={files.subtitleZip} progress={progress.subtitleZip} onChange={updateFile} onRemove={() => removeFile('subtitleZip')} /><p>Name files with their language: <code>movie.en.srt</code> and <code>movie.ru.srt</code>. VTT is also supported.</p></div>
+        {!files.subtitleZip ? <><FileBox icon={<Upload />} name="subtitleEn" label={t('admin_subtitle_en')} accept=".srt,.vtt,text/vtt" file={files.subtitleEn} current={currentFiles.subtitleEn} progress={progress.subtitleEn} onChange={updateFile} onRemove={() => removeFile('subtitleEn')} /><FileBox icon={<Upload />} name="subtitleRu" label={t('admin_subtitle_ru')} accept=".srt,.vtt,text/vtt" file={files.subtitleRu} current={currentFiles.subtitleRu} progress={progress.subtitleRu} onChange={updateFile} onRemove={() => removeFile('subtitleRu')} /></> : null}
       </div>
 
       {error ? <p className="form-error">{error}</p> : null}
-      <button className="primary" disabled={busy}>
+      <button className="primary admin-publish" disabled={busy}>
         <Save size={18} /> {busy ? t('admin_uploading') : movie ? 'Save movie' : t('admin_publish')}
       </button>
     </form>
@@ -513,7 +603,7 @@ function AdminUsersList({ requestConfirm }) {
           </div>
         </div>
         <table className="admin-table">
-          <thead><tr><th><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th><th>Username</th><th>Email</th><th>Role</th><th>Language</th><th>Created</th><th></th></tr></thead>
+          <thead><tr><th><input type="checkbox" checked={allSelected} onChange={toggleAll} /></th><th>Username</th><th>Email</th><th>Role</th><th>Plan</th><th>Language</th><th>Created</th><th></th></tr></thead>
           <tbody>
             {users.map((user) => (
               <tr key={user.id}>
@@ -521,6 +611,7 @@ function AdminUsersList({ requestConfirm }) {
                 <td>{user.username}</td>
                 <td>{user.email}</td>
                 <td>{user.role}</td>
+                <td><span className={`subscription-badge ${user.subscription?.hasFullAccess ? 'premium' : ''}`}>{user.subscription?.hasFullAccess ? 'Premium' : 'Free'}</span></td>
                 <td>{user.language?.toUpperCase()}</td>
                 <td>{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'}</td>
                 <td>
@@ -558,7 +649,7 @@ function AdminUserDetail({ mode }) {
     if (mode !== 'edit') return;
     setLoading(true);
     api(`/api/admin/users/${id}`)
-      .then((user) => setForm({ username: user.username, email: user.email, password: '', role: user.role || 'user' }))
+      .then((user) => setForm({ username: user.username, email: user.email, password: '', role: user.role || 'user', subscriptionPlan: user.subscriptionPlan || 'free', subscriptionExpiresAt: user.subscriptionExpiresAt?.slice(0, 10) || '' }))
       .finally(() => setLoading(false));
   }, [id, mode]);
 
@@ -568,7 +659,7 @@ function AdminUserDetail({ mode }) {
     try {
       await api(mode === 'edit' ? `/api/admin/users/${id}` : '/api/admin/users', {
         method: mode === 'edit' ? 'PATCH' : 'POST',
-        body: JSON.stringify(form)
+        body: JSON.stringify({ ...form, subscriptionExpiresAt: form.subscriptionExpiresAt || null })
       });
       navigate('/admin/users');
     } catch (err) {
@@ -589,6 +680,8 @@ function AdminUserDetail({ mode }) {
         <label>Email<input type="email" value={form.email} onChange={(event) => setForm((value) => ({ ...value, email: event.target.value }))} required /></label>
         <label>Password<input type="password" value={form.password} onChange={(event) => setForm((value) => ({ ...value, password: event.target.value }))} placeholder={mode === 'edit' ? 'Leave empty to keep current' : 'Strong password'} required={mode !== 'edit'} /></label>
         <label>Role<select value={form.role} onChange={(event) => setForm((value) => ({ ...value, role: event.target.value }))}><option value="user">User</option><option value="admin">Admin</option></select></label>
+        <label>Subscription<select value={form.subscriptionPlan} onChange={(event) => setForm((value) => ({ ...value, subscriptionPlan: event.target.value }))}><option value="free">Free · 10-minute preview</option><option value="premium">Premium · Full movies</option></select></label>
+        <label>Premium expires<input type="date" value={form.subscriptionExpiresAt} disabled={form.subscriptionPlan !== 'premium'} onChange={(event) => setForm((value) => ({ ...value, subscriptionExpiresAt: event.target.value }))} /><small>Leave empty for no expiry.</small></label>
       </div>
       {error ? <p className="form-error">{error}</p> : null}
       <button className="primary"><Save size={18} /> {mode === 'edit' ? 'Save user' : 'Add user'}</button>
@@ -596,10 +689,10 @@ function AdminUserDetail({ mode }) {
   );
 }
 
-function FileBox({ icon, label, file, current, preview, progress, onRemove, ...props }) {
+function FileBox({ icon, label, file, current, preview, progress, onRemove, required, ...props }) {
   const text = file?.name || current || label;
   const inputId = `file-${props.name}`;
-  const status = file ? (current ? 'Will replace uploaded file' : 'Selected') : current ? 'Uploaded' : 'Required';
+  const status = file ? (current ? 'Will replace uploaded file' : 'Selected') : current ? 'Uploaded' : required ? 'Required' : 'Optional';
   return (
     <div className="file-box has-actions">
       <label htmlFor={inputId} className="file-picker-main">
@@ -656,14 +749,20 @@ function parseCountries(value) {
 function getPerFileProgress(totalProgress, files) {
   const entries = Object.entries(files).filter(([, file]) => file);
   if (!entries.length) return {};
-  const totalSize = entries.reduce((sum, [, file]) => sum + file.size, 0) || entries.length;
+  const sizeOf = (file) => Array.isArray(file) ? file.reduce((sum, item) => sum + item.size, 0) : file.size || 0;
+  const totalSize = entries.reduce((sum, [, file]) => sum + sizeOf(file), 0) || entries.length;
   let consumed = (Number(totalProgress) / 100) * totalSize;
   return Object.fromEntries(entries.map(([key, file]) => {
-    const size = file.size || 1;
+    const size = sizeOf(file) || 1;
     const value = Math.max(0, Math.min(100, Math.round((consumed / size) * 100)));
     consumed -= size;
     return [key, value];
   }));
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function parseDurationMinutes(value) {
