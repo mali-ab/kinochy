@@ -49,7 +49,7 @@ export default function FavoritesPage() {
               <span className="favorite-badge" title={t('nav_favorites')}>
                 <Heart size={15} fill="currentColor" />
               </span>
-              <span className="kind">{movie.type === 'Series' ? t('movie_type_series') : movie.type === 'Animation' ? t('movie_type_animation') : t('movie_type_movie')}</span>
+              <span className="kind">{movie.type === 'Series' ? t('movie_type_series') : movie.type === 'Cartoon' ? t('movie_type_cartoon') : t('movie_type_movie')}</span>
               <span className="score">
                 <Star size={13} fill="currentColor" /> {Number(movie.rating || 8).toFixed(1)}
               </span>

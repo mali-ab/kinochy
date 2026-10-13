@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, moviePosterFallback } from '../api';
 import { withBasePath } from '../paths';
-import { translateGenre, useLocale } from '../ui/locale.jsx';
+import { normalizeGenreCatalog, translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
 
 export default function HomePage() {
   const [searchParams] = useSearchParams();
@@ -25,7 +25,7 @@ export default function HomePage() {
 
   useEffect(() => {
     api('/api/genres')
-      .then((data) => setGenres(Array.isArray(data) ? data : []))
+      .then((data) => setGenres(normalizeGenreCatalog(data)))
       .catch(() => setGenres([]));
     api('/api/users/favorites/ids')
       .then((data) => setFavoriteIds(Array.isArray(data) ? data : []))
@@ -64,9 +64,9 @@ export default function HomePage() {
     setFilters((value) => ({ ...value, [event.target.name]: event.target.value }));
   }
 
-  const emptyLabel = category === 'Series' ? t('empty_series') : category === 'Animation' ? t('empty_animations') : t('empty_movies');
+  const emptyLabel = category === 'Series' ? t('empty_series') : category === 'Cartoon' ? t('empty_cartoons') : t('empty_movies');
   const featured = !search ? catalog.find((movie) => movie.coverUrl) || catalog[0] : null;
-  const categoryLabel = category === 'Series' ? t('nav_series') : category === 'Animation' ? t('nav_animations') : t('nav_movies');
+  const categoryLabel = category === 'Series' ? t('nav_series') : category === 'Cartoon' ? t('nav_cartoons') : t('nav_movies');
   const featuredGenre = featured?.genres?.[0] || featured?.genre;
 
   return (
@@ -78,8 +78,8 @@ export default function HomePage() {
             <span className="feature-kicker"><Sparkles size={15} /> {t('catalog_spotlight')}</span>
             <div className="feature-meta">
               {featured.year ? <span>{featured.year}</span> : null}
-              {featuredGenre ? <span>{translateGenre(locale, featuredGenre)}</span> : null}
-              <span>{featured.type === 'Animation' ? t('movie_type_animation') : featured.type === 'Series' ? t('movie_type_series') : t('movie_type_movie')}</span>
+              {featuredGenre ? <span>{translateGenre(locale, featuredGenre, genres)}</span> : null}
+              <span>{featured.type === 'Cartoon' ? t('movie_type_cartoon') : featured.type === 'Series' ? t('movie_type_series') : t('movie_type_movie')}</span>
             </div>
             <h1>{featured.title}</h1>
             {featured.description ? <p>{featured.description}</p> : null}
@@ -101,8 +101,8 @@ export default function HomePage() {
         <select className="filter-select genre-filter" name="genre" value={filters.genre} onChange={updateFilter} aria-label={t('filters_genre')}>
           <option value="all">{t('filters_genre')}</option>
           {filterOptions.genres.map((genre) => (
-            <option key={genre} value={genre}>
-              {translateGenre(locale, genre)}
+            <option key={genre.code} value={genre.code}>
+              {translateGenre(locale, genre.code, genres)}
             </option>
           ))}
         </select>
@@ -142,27 +142,32 @@ export default function HomePage() {
                   sizes="(max-width: 620px) 45vw, (max-width: 980px) 30vw, 174px"
                 />
               ) : null}
+              <span className={`difficulty-poster ${movie.difficulty || 'medium'}`}>{translateDifficulty(locale, movie.difficulty || 'medium')}</span>
               <span className="age">{movie.ageRating || '16+'}</span>
               {favoriteIds.includes(movie.id) ? (
                 <span className="favorite-badge" title={t('nav_favorites')}>
                   <Heart size={15} fill="currentColor" />
                 </span>
               ) : null}
-              <span className="kind">{movie.type === 'Series' ? t('movie_type_series') : movie.type === 'Animation' ? t('movie_type_animation') : t('movie_type_movie')}</span>
+              <span className="kind">{movie.type === 'Series' ? t('movie_type_series') : movie.type === 'Cartoon' ? t('movie_type_cartoon') : t('movie_type_movie')}</span>
               <span className="score">
                 <Star size={13} fill="currentColor" /> {Number(movie.rating || 8).toFixed(1)}
               </span>
               {!movie.coverUrl ? (
                 <div className="poster-title">
-                  <span>{movie.genres?.[0] ? translateGenre(locale, movie.genres[0]) : movie.genre || 'English'}</span>
+                  <span>{movie.genres?.[0] ? translateGenre(locale, movie.genres[0], genres) : movie.genre || 'English'}</span>
                   <strong>{movie.title}</strong>
                 </div>
               ) : null}
-              <span className="poster-hover"><Play size={20} fill="currentColor" /></span>
+              <span className="poster-hover">
+                <span className="poster-hover-play"><Play size={18} fill="currentColor" /></span>
+                <strong>{movie.title}</strong>
+                <small>{movie.genres?.[0] ? translateGenre(locale, movie.genres[0], genres) : movie.genre || t('movie_type_movie')}<br />{movie.year || '—'}</small>
+              </span>
             </div>
             <div className="movie-card-copy">
               <strong className="movie-title">{movie.title}</strong>
-              <span className="movie-card-details">{movie.year || '—'} <span>·</span> {movie.genres?.[0] ? translateGenre(locale, movie.genres[0]) : movie.genre || t('movie_type_movie')}</span>
+              <span className="movie-card-details">{movie.year || '—'} <span>·</span> {movie.genres?.[0] ? translateGenre(locale, movie.genres[0], genres) : movie.genre || t('movie_type_movie')} <span>·</span> <span className={`difficulty-inline ${movie.difficulty || 'medium'}`}>{translateDifficulty(locale, movie.difficulty || 'medium')}</span></span>
               <ArrowUpRight className="movie-card-arrow" size={17} aria-hidden="true" />
             </div>
           </Link>
@@ -177,7 +182,7 @@ function unique(values) {
 }
 
 function normalizeType(type) {
-  if (type === 'Animation' || type === 'Animations') return 'Animation';
+  if (type === 'Animation' || type === 'Animations' || type === 'Cartoon' || type === 'Cartoons') return 'Cartoon';
   if (type === 'Series') return 'Series';
   return 'Movie';
 }

@@ -33,6 +33,7 @@ public static class SubscriptionAccess
     };
 }
 public sealed record SubtitleCue(int Id, double Start, double End, string Text);
+public sealed record GenreView(string Code, string Tm, string En, string Ru);
 public sealed record CommentRequest(string Body);
 public sealed record MovieComment(Guid Id, Guid UserId, string Username, string Body, DateTime CreatedAt);
 public sealed record SeriesEpisodeRequest(Guid MovieId, int SeasonNumber, int EpisodeNumber, string? Title);
@@ -43,7 +44,28 @@ public sealed record MovieRow(Guid Id, string Slug, string Title, string? Origin
     decimal? Rating, string? Difficulty, string? Accent, string? AgeRating, string? CoverUrl,
     [property: System.Text.Json.Serialization.JsonIgnore] string VideoPath, DateTime CreatedAt, DateTime UpdatedAt)
 {
-    public object Streaming => new { hls=Path.GetExtension(VideoPath).Equals(".m3u8", StringComparison.OrdinalIgnoreCase) };
+    public object Streaming => new
+    {
+        hls=Path.GetExtension(VideoPath).Equals(".m3u8", StringComparison.OrdinalIgnoreCase),
+        qualities=ReadHlsQualities(VideoPath)
+    };
     public object FileStatus => new { video=true, cover=!string.IsNullOrWhiteSpace(CoverUrl), subtitleEn=true, subtitleRu=true };
     public object FileNames => new { video=Path.GetFileName(VideoPath), cover=CoverUrl is null?null:Path.GetFileName(CoverUrl), subtitleEn="English subtitles", subtitleRu="Russian subtitles" };
+
+    private static string[] ReadHlsQualities(string videoPath)
+    {
+        if (!Path.GetExtension(videoPath).Equals(".m3u8", StringComparison.OrdinalIgnoreCase) || !File.Exists(videoPath)) return [];
+        try
+        {
+            var text=File.ReadAllText(videoPath);
+            return System.Text.RegularExpressions.Regex.Matches(text,@"RESOLUTION=\d+x(?<height>\d+)",System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                .Cast<System.Text.RegularExpressions.Match>()
+                .Select(match=>$"{match.Groups["height"].Value}p")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(quality=>int.TryParse(quality.TrimEnd('p'),out var height)?height:0)
+                .ToArray();
+        }
+        catch(IOException){return [];}
+        catch(UnauthorizedAccessException){return [];}
+    }
 }

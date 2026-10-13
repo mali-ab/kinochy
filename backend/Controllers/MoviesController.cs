@@ -8,7 +8,7 @@ namespace Kinochy.Api.Controllers;
 public sealed class MoviesController(MovieService movies,MovieCommunityService community,TokenService tokens,TranslationService translation,SubscriptionService subscriptions):ControllerBase
 {
     [HttpGet("api/movies")] public Task<List<Models.MovieRow>> List([FromQuery]string? search)=>movies.ListAsync(search);
-    [HttpGet("api/genres")] public Task<string[]> Genres()=>movies.GenresAsync();
+    [HttpGet("api/genres")] public Task<List<GenreView>> Genres()=>movies.GenresAsync();
     [HttpGet("api/movies/{slug}")] public async Task<IActionResult> Get(string slug){var movie=await movies.FindAsync(slug);return movie is null?NotFound(new{message="Movie not found"}):Ok(movie);}
     [HttpGet("api/movies/{slug}/subtitles/{language}")]
     public async Task<IActionResult> Subtitles(string slug,string language)

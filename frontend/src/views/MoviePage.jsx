@@ -5,7 +5,7 @@ import { api, moviePosterFallback } from '../api';
 import { withBasePath } from '../paths';
 import MoviePlayer from '../player/MoviePlayer.jsx';
 import { normalizeSubtitleCues } from '../player/subtitleCues.js';
-import { translateAccent, translateGenre, useLocale } from '../ui/locale.jsx';
+import { translateAccent, translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
 
 export default function MoviePage() {
   const { slug } = useParams();
@@ -166,7 +166,7 @@ export default function MoviePage() {
           {!movie.coverUrl ? <span>{movie.title}</span> : null}
         </div>
         <div className="detail-copy">
-          <p className="eyebrow">{movie.type === 'Series' ? t('movie_type_series') : movie.type === 'Animation' ? t('movie_type_animation') : t('movie_type_movie')}</p>
+          <p className="eyebrow">{movie.type === 'Series' ? t('movie_type_series') : movie.type === 'Cartoon' ? t('movie_type_cartoon') : t('movie_type_movie')}</p>
           <h1>{movie.title}</h1>
           <p className="original">{movie.originalTitle}</p>
           <div className="actions">
@@ -189,7 +189,7 @@ export default function MoviePage() {
               <Star size={16} fill="currentColor" /> {Number(movie.rating || 8).toFixed(1)} / 10
             </dd>
             <dt>{t('difficulty')}</dt>
-            <dd>{translateAccent(locale, movie.difficulty)}</dd>
+            <dd><span className={`difficulty-level ${movie.difficulty || 'medium'}`}>{translateDifficulty(locale, movie.difficulty || 'medium')}</span></dd>
             <dt>{t('accent')}</dt>
             <dd>{movie.accent ? translateAccent(locale, movie.accent) : '—'}</dd>
             <dt>{t('subtitles')}</dt>
@@ -242,7 +242,7 @@ export default function MoviePage() {
             <span className="movie-recommendation-poster" style={!item.coverUrl ? { background: moviePosterFallback(item) } : undefined}>
               {item.coverUrl ? <img src={withBasePath(item.coverUrl)} alt="" loading="lazy" /> : <span>{item.title?.charAt(0)}</span>}
             </span>
-            <span className="movie-recommendation-copy"><strong>{item.title}</strong><small>{item.year || '—'} · {item.genres?.[0] || item.genre || item.type}</small></span>
+            <span className="movie-recommendation-copy"><strong>{item.title}</strong><small>{item.year || '—'} · {item.genres?.[0] ? translateGenre(locale, item.genres[0]) : item.genre || item.type}</small></span>
           </Link>
         ))}</div> : <p className="movie-extras-empty">{t('movie_recommended_empty')}</p>}
       </section>

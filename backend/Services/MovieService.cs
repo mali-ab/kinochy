@@ -46,12 +46,12 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         var rows = await ReadMany(command); return rows.FirstOrDefault();
     }
 
-    public async Task<string[]> GenresAsync()
+    public async Task<List<GenreView>> GenresAsync()
     {
         await using var connection = await database.OpenAsync();
-        await using var command = connection.Command("SELECT name FROM genres ORDER BY name");
-        await using var reader = await command.ExecuteReaderAsync(); var result = new List<string>();
-        while (await reader.ReadAsync()) result.Add(reader.GetString(0)); return result.ToArray();
+        await using var command = connection.Command("SELECT name,name_tm,name_en,name_ru FROM genres WHERE name_en IS NOT NULL ORDER BY name_en");
+        await using var reader = await command.ExecuteReaderAsync(); var result = new List<GenreView>();
+        while (await reader.ReadAsync()) result.Add(new(reader.GetString(0),reader.GetString(1),reader.GetString(2),reader.GetString(3))); return result;
     }
 
     public async Task<List<SubtitleCue>> SubtitlesAsync(Guid movieId, string language)
@@ -70,20 +70,24 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
 
     public async Task<MovieRow> SaveAsync(Guid? id, IFormCollection form)
     {
+        var existingMovie=id is null?null:await FindAsync(id.Value.ToString(),true);
+        if(id is not null&&existingMovie is null)throw new ApiException("Movie not found",404);
         var title=form["title"].ToString().Trim();if(title.Length==0)throw new ApiException("Title is required");
         foreach(var file in form.Files)if(file.Length>UploadMaxBytes)throw new ApiException($"{file.FileName} exceeds the 8 GiB upload limit",413);
         var playlist=form.Files.GetFile("video");
         var subtitleZip=form.Files.GetFile("subtitleZip");
         var hlsFiles=form.Files.Where(file=>file.Name=="hlsFiles").ToList();
+        var qualityZips=form.Files.Where(file=>file.Name.StartsWith("quality_",StringComparison.OrdinalIgnoreCase)).Select(file=>(Quality:file.Name[8..].ToLowerInvariant(),Zip:file)).ToList();
         var isHls=playlist is not null && Path.GetExtension(playlist.FileName).Equals(".m3u8",StringComparison.OrdinalIgnoreCase);
         var isHlsZip=playlist is not null && Path.GetExtension(playlist.FileName).Equals(".zip",StringComparison.OrdinalIgnoreCase);
         if(!isHls && !isHlsZip && hlsFiles.Count>0)throw new ApiException("HLS segments require an .m3u8 playlist.");
         if(isHlsZip && hlsFiles.Count>0)throw new ApiException("A ZIP bundle must contain all HLS playlists and media files.");
-        if(id is null && playlist is null)throw new ApiException("Video or HLS playlist is required");
+        if(qualityZips.Count>0&&(playlist is not null||hlsFiles.Count>0))throw new ApiException("Upload either separate quality ZIPs or one complete HLS bundle, not both.");
+        if(id is null && playlist is null && qualityZips.Count==0)throw new ApiException("Video or HLS quality ZIP is required");
         if(playlist is not null && !isHls && !isHlsZip && !new[]{".mp4",".webm",".mkv"}.Contains(Path.GetExtension(playlist.FileName),StringComparer.OrdinalIgnoreCase))throw new ApiException("Upload an MP4, WebM, MKV, M3U8 playlist, or HLS ZIP bundle.");
         var uploadRoot=Path.Combine(environment.ContentRootPath,"storage","uploads");Directory.CreateDirectory(uploadRoot);
         async Task<string?> Save(string key){var file=form.Files.GetFile(key);if(file is null)return null;var name=$"{Guid.NewGuid():N}{Path.GetExtension(file.FileName)}";var path=Path.Combine(uploadRoot,name);await using var output=File.Create(path);await file.CopyToAsync(output);return path;}
-        var video=isHlsZip?await HlsUpload.SaveZipAsync(playlist!,uploadRoot):isHls?await HlsUpload.SaveAsync(playlist!,hlsFiles,uploadRoot):await Save("video");
+        var video=qualityZips.Count>0?await HlsUpload.SaveQualityBundleAsync(qualityZips,uploadRoot,existingMovie?.VideoPath):isHlsZip?await HlsUpload.SaveZipAsync(playlist!,uploadRoot):isHls?await HlsUpload.SaveAsync(playlist!,hlsFiles,uploadRoot):await Save("video");
         var cover=await Save("cover");var en=form.Files.GetFile("subtitleEn");var ru=form.Files.GetFile("subtitleRu");
         if(subtitleZip is not null&&(en is not null||ru is not null))throw new ApiException("Upload a subtitle ZIP or separate subtitle files, not both.");
         var subtitleSources=new Dictionary<string,string>();
@@ -91,17 +95,49 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         else{if(en is not null)subtitleSources["en"]=await ReadTextAsync(en);if(ru is not null)subtitleSources["ru"]=await ReadTextAsync(ru);}
         var suffix=(id??Guid.NewGuid()).ToString("N")[..8];
         var slug=System.Text.RegularExpressions.Regex.Replace(title.ToLowerInvariant(),"[^a-z0-9]+","-").Trim('-')+"-"+suffix;
-        var genres=JsonSerializer.Serialize(JsonSerializer.Deserialize<string[]>(form["genres"].ToString())??["Drama"]);
+        var genreValues=(JsonSerializer.Deserialize<string[]>(form["genres"].ToString())??["Drama"]).Select(NormalizeGenre).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var genres=JsonSerializer.Serialize(genreValues.Length>0?genreValues:["Drama"]);
+        var movieType=NormalizeMovieType(form["type"].ToString());
+        var difficulty=NormalizeDifficulty(form["difficulty"].ToString());
         var countryRaw=form["country"].ToString();var country=countryRaw.StartsWith('[')?string.Join(", ",JsonSerializer.Deserialize<string[]>(countryRaw)??[]):countryRaw;
         await using var connection=await database.OpenAsync();await using var tx=await connection.BeginTransactionAsync();
         Guid movieId;
-        if(id is null){if(video is null)throw new ApiException("Video is required");const string sql="""INSERT INTO movies(slug,title,original_title,description,year,country,genre,genres,type,duration,rating,difficulty,accent,age_rating,cover_url,video_path) VALUES(@slug,@title,@original,@description,@year,@country,@genre,@genres::jsonb,@type,@duration,@rating,@difficulty,@accent,@age,@cover,@video) RETURNING id""";await using var q=connection.Command(sql,("slug",slug),("title",title),("original",form["originalTitle"].ToString()),("description",form["description"].ToString()),("year",int.TryParse(form["year"].ToString(),out var year)?year:null),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",form["type"].ToString()),("duration",form["duration"].ToString()),("rating",decimal.TryParse(form["rating"].ToString(),out var rating)?rating:8m),("difficulty",form["difficulty"].ToString()),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",cover is null?null:"/media/uploads/"+Path.GetFileName(cover)),("video",video));movieId=(Guid)(await q.ExecuteScalarAsync())!;}
-        else{movieId=id.Value;const string sql="""UPDATE movies SET title=@title,original_title=@original,description=@description,year=@year,country=@country,genre=@genre,genres=@genres::jsonb,type=@type,duration=@duration,rating=@rating,difficulty=@difficulty,accent=@accent,age_rating=@age,cover_url=coalesce(@cover,cover_url),video_path=coalesce(@video,video_path),updated_at=now() WHERE id=@id""";await using var q=connection.Command(sql,("id",movieId),("title",title),("original",form["originalTitle"].ToString()),("description",form["description"].ToString()),("year",int.TryParse(form["year"].ToString(),out var year)?year:null),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",form["type"].ToString()),("duration",form["duration"].ToString()),("rating",decimal.TryParse(form["rating"].ToString(),out var rating)?rating:8m),("difficulty",form["difficulty"].ToString()),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",cover is null?null:"/media/uploads/"+Path.GetFileName(cover)),("video",video));if(await q.ExecuteNonQueryAsync()==0)throw new ApiException("Movie not found",404);}
+        if(id is null){if(video is null)throw new ApiException("Video is required");const string sql="""INSERT INTO movies(slug,title,original_title,description,year,country,genre,genres,type,duration,rating,difficulty,accent,age_rating,cover_url,video_path) VALUES(@slug,@title,@original,@description,@year,@country,@genre,@genres::jsonb,@type,@duration,@rating,@difficulty,@accent,@age,@cover,@video) RETURNING id""";await using var q=connection.Command(sql,("slug",slug),("title",title),("original",form["originalTitle"].ToString()),("description",form["description"].ToString()),("year",int.TryParse(form["year"].ToString(),out var year)?year:null),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",movieType),("duration",form["duration"].ToString()),("rating",decimal.TryParse(form["rating"].ToString(),out var rating)?rating:8m),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",cover is null?null:"/media/uploads/"+Path.GetFileName(cover)),("video",video));movieId=(Guid)(await q.ExecuteScalarAsync())!;}
+        else{movieId=id.Value;const string sql="""UPDATE movies SET title=@title,original_title=@original,description=@description,year=@year,country=@country,genre=@genre,genres=@genres::jsonb,type=@type,duration=@duration,rating=@rating,difficulty=@difficulty,accent=@accent,age_rating=@age,cover_url=coalesce(@cover,cover_url),video_path=coalesce(@video,video_path),updated_at=now() WHERE id=@id""";await using var q=connection.Command(sql,("id",movieId),("title",title),("original",form["originalTitle"].ToString()),("description",form["description"].ToString()),("year",int.TryParse(form["year"].ToString(),out var year)?year:null),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",movieType),("duration",form["duration"].ToString()),("rating",decimal.TryParse(form["rating"].ToString(),out var rating)?rating:8m),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",cover is null?null:"/media/uploads/"+Path.GetFileName(cover)),("video",video));if(await q.ExecuteNonQueryAsync()==0)throw new ApiException("Movie not found",404);}
         foreach(var item in subtitleSources){var cues=SubtitleParser.Parse(item.Value);if(cues.Count==0)throw new ApiException($"{item.Key.ToUpperInvariant()} subtitle file has no valid cues.");await using var q=connection.Command("INSERT INTO subtitles(movie_id,language,cues) VALUES(@id,@language,@cues::jsonb) ON CONFLICT(movie_id,language) DO UPDATE SET cues=excluded.cues",("id",movieId),("language",item.Key),("cues",JsonSerializer.Serialize(cues,SubtitleJson)));await q.ExecuteNonQueryAsync();}
         await tx.CommitAsync();return (await FindAsync(movieId.ToString(),true))!;
     }
 
     private static async Task<string> ReadTextAsync(IFormFile file){using var reader=new StreamReader(file.OpenReadStream());return await reader.ReadToEndAsync();}
+
+    private static string NormalizeGenre(string value)
+    {
+        var normalized=value.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "боевик" or "aksiýon" => "Action", "приключения" or "başdan geçirme" or "sargytly" => "Adventure",
+            "animation" or "анимация" or "мультфильм" or "cartoon" or "animasiýa" or "multfilm" => "Cartoon", "комедия" or "komediýa" => "Comedy",
+            "криминал" or "jenaýat" => "Crime", "документальный" or "dokumental" => "Documentary",
+            "драма" or "drama" => "Drama", "семейный" or "maşgala" => "Family",
+            "фэнтези" or "fantastika" => "Fantasy", "исторический" or "taryhy" => "History",
+            "ужасы" or "gorky" => "Horror", "детектив" or "syrly" => "Mystery",
+            "романтика" or "söýgi" => "Romance", "научная фантастика" or "ylmy-fantastika" => "Sci-Fi",
+            "триллер" or "triller" => "Thriller", "военный" or "uruş" => "War",
+            _ => value.Trim()
+        };
+    }
+
+    private static string NormalizeMovieType(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "animation" or "animations" or "cartoon" or "cartoons" => "Cartoon",
+        "series" => "Series",
+        _ => "Movie"
+    };
+
+    private static string NormalizeDifficulty(string value) => value.Trim().ToLowerInvariant() switch
+    {
+        "easy" => "easy", "hard" => "hard", _ => "medium"
+    };
 
     private static async Task<List<MovieRow>> ReadMany(Npgsql.NpgsqlCommand command)
     {

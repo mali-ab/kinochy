@@ -1,6 +1,6 @@
-import { Crown, LayoutDashboard, LogOut, Search } from 'lucide-react';
+import { Check, ChevronDown, Crown, Globe2, LayoutDashboard, LoaderCircle, LogOut, Search } from 'lucide-react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { withBasePath } from '../paths';
 import { getLanguageOptions, LocaleProvider, t } from './locale.jsx';
@@ -12,6 +12,9 @@ export default function AppShell() {
   const [admin, setAdmin] = useState(null);
   const [checking, setChecking] = useState(true);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const [languageSaving, setLanguageSaving] = useState(false);
+  const languageRef = useRef(null);
   const [locale, setLocale] = useState(() => window.localStorage.getItem('kinochy_locale') || 'tm');
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,14 +46,37 @@ export default function AppShell() {
     if (user?.language) setLocale(user.language);
   }, [user?.language]);
 
+  useEffect(() => {
+    if (!languageOpen) return undefined;
+
+    function closeOnOutsidePress(event) {
+      if (!languageRef.current?.contains(event.target)) setLanguageOpen(false);
+    }
+
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setLanguageOpen(false);
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePress);
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePress);
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [languageOpen]);
+
   function submitSearch(event) {
     event.preventDefault();
     navigate(`/?search=${encodeURIComponent(search)}`);
   }
 
   async function changeLanguage(nextLocale) {
+    if (nextLocale === locale) { setLanguageOpen(false); return; }
+    const previousLocale = locale;
     setLocale(nextLocale);
+    setLanguageOpen(false);
     if (!user) return;
+    setLanguageSaving(true);
     try {
       const data = await api('/api/users/language', {
         method: 'PATCH',
@@ -58,7 +84,9 @@ export default function AppShell() {
       });
       setUser(data.user);
     } catch {
-      setLocale(user.language || 'tm');
+      setLocale(previousLocale);
+    } finally {
+      setLanguageSaving(false);
     }
   }
 
@@ -87,7 +115,7 @@ export default function AppShell() {
               <nav className="nav-tabs">
                 <Link className={category === 'Movie' && !isVocabulary && !isFavorites ? 'selected' : ''} to="/?category=Movie">{tr('nav_movies')}</Link>
                 <Link className={category === 'Series' ? 'selected' : ''} to="/?category=Series">{tr('nav_series')}</Link>
-                <Link className={category === 'Animation' ? 'selected' : ''} to="/?category=Animation">{tr('nav_animations')}</Link>
+                <Link className={category === 'Cartoon' ? 'selected' : ''} to="/?category=Cartoon">{tr('nav_cartoons')}</Link>
                 <Link className={isFavorites ? 'selected' : ''} to="/favorites">{tr('nav_favorites')}</Link>
                 <Link className={isVocabulary ? 'selected' : ''} to="/vocabulary">{tr('nav_vocabulary')}</Link>
               </nav>
@@ -97,14 +125,17 @@ export default function AppShell() {
                   <Search size={21} />
                 </button>
               </form>
-              <div className="language-picker">
-                <select value={locale} onChange={(event) => changeLanguage(event.target.value)} aria-label={tr('language_label')}>
-                  {languageOptions.map((option) => (
-                    <option key={option.code} value={option.code}>
-                      {option.code.toUpperCase()}
-                    </option>
-                  ))}
-                </select>
+              <div ref={languageRef} className={`language-picker language-switch ${languageOpen ? 'open' : ''}`}>
+                <button type="button" className="language-switch-trigger" onClick={() => setLanguageOpen((value) => !value)} aria-label={tr('language_label')} aria-haspopup="menu" aria-expanded={languageOpen} disabled={languageSaving}>
+                  {languageSaving ? <LoaderCircle className="language-spinner" size={17} /> : <Globe2 size={17} />}
+                  <span><small>{tr('language_label')}</small><strong>{languageOptions.find((option) => option.code === locale)?.label}</strong></span>
+                  <ChevronDown className="language-chevron" size={15} />
+                </button>
+                {languageOpen ? <div className="language-menu" role="menu">{languageOptions.map((option) => (
+                  <button type="button" role="menuitemradio" aria-checked={locale === option.code} className={locale === option.code ? 'active' : ''} key={option.code} onClick={() => changeLanguage(option.code)}>
+                    <span className="language-code">{option.code.toUpperCase()}</span><span><strong>{option.label}</strong><small>{languageNativeHint(option.code)}</small></span>{locale === option.code ? <Check size={16} /> : null}
+                  </button>
+                ))}</div> : null}
               </div>
               <div className="top-actions">
                 {admin ? (
@@ -146,4 +177,10 @@ export default function AppShell() {
       </div>
     </LocaleProvider>
   );
+}
+
+function languageNativeHint(code) {
+  if (code === 'tm') return 'Türkmen dili';
+  if (code === 'ru') return 'Русский язык';
+  return 'English language';
 }

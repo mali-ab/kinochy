@@ -11,7 +11,7 @@ const localeNames = {
 const genreLabels = {
   Action: { tm: 'Aksiýon', en: 'Action', ru: 'Боевик' },
   Adventure: { tm: 'Sargytly', en: 'Adventure', ru: 'Приключения' },
-  Animation: { tm: 'Animasiýa', en: 'Animation', ru: 'Анимация' },
+  Cartoon: { tm: 'Multfilm', en: 'Cartoon', ru: 'Мультфильм' },
   Comedy: { tm: 'Komediýa', en: 'Comedy', ru: 'Комедия' },
   Crime: { tm: 'Jenaýat', en: 'Crime', ru: 'Криминал' },
   Documentary: { tm: 'Dokumental', en: 'Documentary', ru: 'Документальный' },
@@ -35,11 +35,17 @@ const accentLabels = {
   hard: { tm: 'Kyn', en: 'Hard', ru: 'Сложный' }
 };
 
+const difficultyLabels = {
+  easy: { tm: 'Ýeňil', en: 'Easy', ru: 'Легко' },
+  medium: { tm: 'Orta', en: 'Medium', ru: 'Средне' },
+  hard: { tm: 'Kyn', en: 'Hard', ru: 'Сложно' }
+};
+
 const translations = {
   tm: {
     nav_movies: 'Filmler',
     nav_series: 'Seriallar',
-    nav_animations: 'Animasiýalar',
+    nav_cartoons: 'Multfilmler',
     nav_favorites: 'Halananlar',
     nav_vocabulary: 'Sözlük',
     nav_admin: 'Admin',
@@ -107,7 +113,7 @@ const translations = {
     movie_not_found: 'Film tapylmady.',
     empty_movies: 'Film ýok',
     empty_series: 'Serial ýok',
-    empty_animations: 'Animasiýa ýok',
+    empty_cartoons: 'Multfilm ýok',
     empty_favorites: 'Halanan film ýok',
     empty_vocabulary: 'Saklanan söz ýok.',
     favorites_title: 'Halanan filmler',
@@ -115,7 +121,7 @@ const translations = {
     vocabulary_subtitle: 'Saklanan sözleriňiz şu ýerde peýda bolar.',
     movie_type_movie: 'Film',
     movie_type_series: 'Serial',
-    movie_type_animation: 'Animasiýa',
+    movie_type_cartoon: 'Multfilm',
     add_favorites: 'Halananlara goş',
     remove_favorites: 'Halananlardan aýyr',
     mark_watched: 'Görülen diýip belläň',
@@ -125,7 +131,8 @@ const translations = {
     duration: 'Dowamlylygy:',
     uploaded_movie: 'Ýüklenen film',
     rating: 'Reýting:',
-    difficulty: 'Dereje:',
+    difficulty: 'Düşünmek kynlygy:',
+    understanding_difficulty: 'Düşünmek kynlygy',
     accent: 'Aksent:',
     subtitles: 'Subtitrler:',
     double_subtitles: 'Iki dilli subtitrler',
@@ -210,7 +217,7 @@ const translations = {
   en: {
     nav_movies: 'Movies',
     nav_series: 'Series',
-    nav_animations: 'Animations',
+    nav_cartoons: 'Cartoons',
     nav_favorites: 'Favorites',
     nav_vocabulary: 'Vocabulary',
     nav_admin: 'Admin',
@@ -278,7 +285,7 @@ const translations = {
     movie_not_found: 'Movie not found.',
     empty_movies: 'No movies',
     empty_series: 'No series',
-    empty_animations: 'No animations',
+    empty_cartoons: 'No cartoons',
     empty_favorites: 'No favorite movies',
     empty_vocabulary: 'No saved words yet.',
     favorites_title: 'Favorite movies',
@@ -286,7 +293,7 @@ const translations = {
     vocabulary_subtitle: 'Your saved words will appear here.',
     movie_type_movie: 'Movie',
     movie_type_series: 'Series',
-    movie_type_animation: 'Animation',
+    movie_type_cartoon: 'Cartoon',
     add_favorites: 'Add to favorites',
     remove_favorites: 'Remove from favorites',
     mark_watched: 'Mark watched',
@@ -296,7 +303,8 @@ const translations = {
     duration: 'Duration:',
     uploaded_movie: 'Uploaded movie',
     rating: 'Rating:',
-    difficulty: 'Difficulty:',
+    difficulty: 'Understanding difficulty:',
+    understanding_difficulty: 'Understanding difficulty',
     accent: 'Accent:',
     subtitles: 'Subtitles:',
     double_subtitles: 'Double subtitles',
@@ -381,7 +389,7 @@ const translations = {
   ru: {
     nav_movies: 'Фильмы',
     nav_series: 'Сериалы',
-    nav_animations: 'Анимация',
+    nav_cartoons: 'Мультфильмы',
     nav_favorites: 'Избранное',
     nav_vocabulary: 'Словарь',
     nav_admin: 'Админ',
@@ -449,7 +457,7 @@ const translations = {
     movie_not_found: 'Фильм не найден.',
     empty_movies: 'Нет фильмов',
     empty_series: 'Нет сериалов',
-    empty_animations: 'Нет анимации',
+    empty_cartoons: 'Нет мультфильмов',
     empty_favorites: 'Нет избранных фильмов',
     empty_vocabulary: 'Пока нет сохраненных слов.',
     favorites_title: 'Избранные фильмы',
@@ -457,7 +465,7 @@ const translations = {
     vocabulary_subtitle: 'Здесь появятся ваши сохраненные слова.',
     movie_type_movie: 'Фильм',
     movie_type_series: 'Сериал',
-    movie_type_animation: 'Анимация',
+    movie_type_cartoon: 'Мультфильм',
     add_favorites: 'Добавить в избранное',
     remove_favorites: 'Удалить из избранного',
     mark_watched: 'Отметить просмотренным',
@@ -467,7 +475,8 @@ const translations = {
     duration: 'Длительность:',
     uploaded_movie: 'Загруженный фильм',
     rating: 'Рейтинг:',
-    difficulty: 'Сложность:',
+    difficulty: 'Сложность понимания:',
+    understanding_difficulty: 'Сложность понимания',
     accent: 'Акцент:',
     subtitles: 'Субтитры:',
     double_subtitles: 'Двойные субтитры',
@@ -569,10 +578,24 @@ export function getLanguageOptions() {
   return Object.keys(localeNames).map((code) => ({ code, label: localeNames[code] }));
 }
 
-export function translateGenre(locale, value) {
-  return genreLabels[value]?.[locale] || value;
+export function translateGenre(locale, value, catalog = []) {
+  const genreCode = value === 'Animation' ? 'Cartoon' : value;
+  const databaseGenre = catalog.find((genre) => genre.code === genreCode);
+  if (databaseGenre) return databaseGenre[locale] || databaseGenre.en || value;
+  const normalized = String(genreCode || '').toLocaleLowerCase();
+  const labels = genreLabels[genreCode] || Object.values(genreLabels).find((item) => Object.values(item).some((label) => label.toLocaleLowerCase() === normalized));
+  return labels?.[locale] || value;
+}
+
+export function normalizeGenreCatalog(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((genre) => typeof genre === 'string' ? { code: genre, tm: genre, en: genre, ru: genre } : genre).filter((genre) => genre?.code);
 }
 
 export function translateAccent(locale, value) {
   return accentLabels[value]?.[locale] || value;
+}
+
+export function translateDifficulty(locale, value) {
+  return difficultyLabels[value]?.[locale] || value;
 }

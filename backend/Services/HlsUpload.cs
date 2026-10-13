@@ -6,6 +6,17 @@ namespace Kinochy.Api.Services;
 
 public static partial class HlsUpload
 {
+    private static readonly Dictionary<string, (int Width, int Height, int Bandwidth)> QualityProfiles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["144p"] = (256, 144, 180_000),
+        ["240p"] = (426, 240, 350_000),
+        ["360p"] = (640, 360, 800_000),
+        ["480p"] = (854, 480, 1_400_000),
+        ["720p"] = (1280, 720, 2_800_000),
+        ["1080p"] = (1920, 1080, 5_500_000),
+        ["1440p"] = (2560, 1440, 9_000_000),
+        ["2160p"] = (3840, 2160, 18_000_000)
+    };
     private const int MaxFiles = 10_000;
     private const long MaxExtractedBytes = 8L * 1024 * 1024 * 1024;
     private const long MaxPlaylistBytes = 2 * 1024 * 1024;
@@ -103,6 +114,87 @@ public static partial class HlsUpload
             Directory.Delete(directory, recursive: true);
             throw;
         }
+    }
+
+    public static async Task<string> SaveQualityBundleAsync(IReadOnlyList<(string Quality, IFormFile Zip)> renditions, string uploadRoot, string? existingPlaylist = null)
+    {
+        if (renditions.Count == 0) throw new ApiException("Add at least one quality ZIP.");
+        if (renditions.Select(item => item.Quality).Distinct(StringComparer.OrdinalIgnoreCase).Count() != renditions.Count)
+            throw new ApiException("Each movie quality can only be uploaded once.");
+
+        var existingVariants = existingPlaylist is not null && Path.GetExtension(existingPlaylist).Equals(".m3u8", StringComparison.OrdinalIgnoreCase) && File.Exists(existingPlaylist)
+            ? ReadMasterVariants(existingPlaylist)
+            : [];
+        var canExtend = existingVariants.Count > 0;
+        var bundleDirectory = canExtend ? Path.GetDirectoryName(existingPlaylist!)! : CreateBundleDirectory(uploadRoot);
+        var variants = canExtend ? existingVariants : new List<(string Quality, string Playlist)>();
+        var createdBundle = !canExtend;
+        try
+        {
+            foreach (var (quality, zip) in renditions)
+            {
+                if (!QualityProfiles.ContainsKey(quality)) throw new ApiException($"Unsupported movie quality: {quality}");
+                if (!Path.GetExtension(zip.FileName).Equals(".zip", StringComparison.OrdinalIgnoreCase))
+                    throw new ApiException($"{quality} must be uploaded as a ZIP containing an M3U8 playlist and its segments.");
+
+                var savedPlaylist = await SaveZipAsync(zip, uploadRoot);
+                var temporaryDirectory = FindBundleDirectory(savedPlaylist, uploadRoot);
+                var relativePlaylist = Path.GetRelativePath(temporaryDirectory, savedPlaylist);
+                var qualityDirectory = Path.Combine(bundleDirectory, quality.ToLowerInvariant());
+                if (Directory.Exists(qualityDirectory)) Directory.Delete(qualityDirectory, recursive: true);
+                Directory.Move(temporaryDirectory, qualityDirectory);
+                variants.RemoveAll(item => item.Quality.Equals(quality, StringComparison.OrdinalIgnoreCase));
+                variants.Add((quality.ToLowerInvariant(), $"{quality.ToLowerInvariant()}/{relativePlaylist.Replace('\\', '/')}"));
+            }
+
+            var masterPath = Path.Combine(bundleDirectory, "playlist.m3u8");
+            await File.WriteAllTextAsync(masterPath, BuildMasterPlaylist(variants));
+            return masterPath;
+        }
+        catch
+        {
+            if (createdBundle && Directory.Exists(bundleDirectory)) Directory.Delete(bundleDirectory, recursive: true);
+            throw;
+        }
+    }
+
+    private static List<(string Quality, string Playlist)> ReadMasterVariants(string masterPath)
+    {
+        var variants = new List<(string Quality, string Playlist)>();
+        var lines = File.ReadAllLines(masterPath);
+        for (var index = 0; index < lines.Length - 1; index++)
+        {
+            if (!lines[index].StartsWith("#EXT-X-STREAM-INF:", StringComparison.Ordinal)) continue;
+            var match = Regex.Match(lines[index], @"RESOLUTION=\d+x(?<height>\d+)", RegexOptions.IgnoreCase);
+            if (!match.Success) continue;
+            var quality = $"{match.Groups["height"].Value}p";
+            if (!QualityProfiles.ContainsKey(quality)) continue;
+            var playlist = lines.Skip(index + 1).FirstOrDefault(line => line.Length > 0 && !line.StartsWith('#'));
+            if (playlist is not null) variants.Add((quality.ToLowerInvariant(), playlist));
+        }
+        return variants;
+    }
+
+    private static string FindBundleDirectory(string playlistPath, string uploadRoot)
+    {
+        var relative = Path.GetRelativePath(uploadRoot, playlistPath);
+        var firstPart = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
+        var directory = Path.Combine(uploadRoot, firstPart);
+        if (!directory.StartsWith(Path.GetFullPath(uploadRoot) + Path.DirectorySeparatorChar, StringComparison.Ordinal) || !Directory.Exists(directory))
+            throw new ApiException("Could not prepare the HLS quality bundle.");
+        return directory;
+    }
+
+    private static string BuildMasterPlaylist(IEnumerable<(string Quality, string Playlist)> variants)
+    {
+        var lines = new List<string> { "#EXTM3U", "# KINOCHY-QUALITY-BUNDLE", "#EXT-X-VERSION:3" };
+        foreach (var variant in variants.OrderBy(item => QualityProfiles[item.Quality].Height))
+        {
+            var profile = QualityProfiles[variant.Quality];
+            lines.Add($"#EXT-X-STREAM-INF:BANDWIDTH={profile.Bandwidth},RESOLUTION={profile.Width}x{profile.Height},NAME=\"{variant.Quality}\"");
+            lines.Add(variant.Playlist);
+        }
+        return string.Join("\n", lines) + "\n";
     }
 
     private static string CreateBundleDirectory(string uploadRoot)

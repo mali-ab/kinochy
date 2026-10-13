@@ -1,11 +1,11 @@
-import { ArrowLeft, Edit3, Film, Image, Lock, LogOut, Plus, Save, Trash2, Upload, Users } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Edit3, Film, Image, Lock, LogOut, Plus, Save, Trash2, Upload, Users } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, Navigate, Route, Routes, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, NavLink, Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { api, apiUpload, moviePosterFallback } from '../api';
 import { withBasePath } from '../paths';
 import MoviePlayer from '../player/MoviePlayer.jsx';
 import { normalizeSubtitleCues } from '../player/subtitleCues.js';
-import { translateGenre, useLocale } from '../ui/locale.jsx';
+import { normalizeGenreCatalog, translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
 
 const initialMovieForm = {
   title: '',
@@ -169,12 +169,12 @@ function AdminDashboard({ admin, onLogout }) {
       </div>
 
       <div className="admin-tabs">
-        <Link to="/admin">
-          <Film size={18} /> Movies
-        </Link>
-        <Link to="/admin/users">
-          <Users size={18} /> Users
-        </Link>
+        <NavLink to="/admin" end>
+          <Film size={18} /><span>Movies<small>Manage the catalog</small></span>
+        </NavLink>
+        <NavLink to="/admin/users">
+          <Users size={18} /><span>Users<small>Accounts and access</small></span>
+        </NavLink>
       </div>
 
       <Routes>
@@ -209,6 +209,7 @@ function AdminDashboard({ admin, onLogout }) {
 function AdminMoviesList() {
   const [movies, setMovies] = useState([]);
   const [message, setMessage] = useState('');
+  const { locale } = useLocale();
 
   useEffect(() => {
     api('/api/movies?search=').then((data) => setMovies(Array.isArray(data) ? data : []));
@@ -217,23 +218,25 @@ function AdminMoviesList() {
   return (
     <>
       <div className="admin-list-head">
-        <h2>Movies</h2>
+        <div><span className="admin-section-kicker">Content library</span><h2>Movies</h2><p>{movies.length} title{movies.length === 1 ? '' : 's'} in your catalog</p></div>
         <Link className="primary" to="/admin/movies/new">
           <Plus size={18} /> Add movie
         </Link>
       </div>
       {message ? <p className="form-message">{message}</p> : null}
-      <div className="admin-movie-list">
+      {movies.length ? <div className="admin-movie-list">
         {movies.map((movie) => (
           <Link key={movie.id} className="admin-movie-row" to={`/admin/movies/${movie.id}`}>
             <span className="admin-row-cover" style={movie.coverUrl ? { backgroundImage: `url(${withBasePath(movie.coverUrl)})` } : { background: moviePosterFallback(movie) }} />
-            <span>
+            <span className="admin-row-copy">
               <strong>{movie.title}</strong>
-              <small>{movie.type} / {movie.year} / {movie.genres?.join(', ') || movie.genre}</small>
+              <small><span>{movie.type}</span><span>{movie.year || '—'}</span><span>{movie.genres?.join(', ') || movie.genre || 'No genre'}</span></small>
             </span>
+            <span className={`admin-difficulty ${movie.difficulty || 'medium'}`}>{translateDifficulty(locale, movie.difficulty || 'medium')}</span>
+            <ChevronRight className="admin-row-arrow" size={19} />
           </Link>
         ))}
-      </div>
+      </div> : <div className="admin-empty-state"><span><Film size={28} /></span><h3>Your catalog is empty</h3><p>Add your first movie, series, or cartoon to begin.</p><Link className="primary" to="/admin/movies/new"><Plus size={17} /> Add movie</Link></div>}
     </>
   );
 }
@@ -308,6 +311,7 @@ function AdminMovieDetail({ requestConfirm }) {
             <dt>Genres</dt><dd>{movie.genres?.map((genre) => translateGenre(locale, genre)).join(', ') || movie.genre}</dd>
             <dt>Duration</dt><dd>{formatDuration(movie.duration, locale)}</dd>
             <dt>Rating</dt><dd>{movie.rating}</dd>
+            <dt>Understanding</dt><dd><span className={`admin-difficulty ${movie.difficulty || 'medium'}`}>{translateDifficulty(locale, movie.difficulty || 'medium')}</span></dd>
           </dl>
         </div>
       </div>
@@ -377,11 +381,11 @@ function AdminMovieEditor() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [movie, setMovie] = useState(null);
-  const [genres, setGenres] = useState(['Drama']);
+  const [genres, setGenres] = useState([{ code: 'Drama', tm: 'Drama', en: 'Drama', ru: 'Драма' }]);
   const [loading, setLoading] = useState(Boolean(id));
 
   useEffect(() => {
-    api('/api/genres').then((data) => setGenres(Array.isArray(data) && data.length ? data : ['Drama'])).catch(() => setGenres(['Drama']));
+    api('/api/genres').then((data) => { const catalog = normalizeGenreCatalog(data); if (catalog.length) setGenres(catalog); }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -408,6 +412,7 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
   const [sourceType, setSourceType] = useState(movie?.streaming?.hls ? 'hls' : 'video');
   const [files, setFiles] = useState({});
   const [hlsFiles, setHlsFiles] = useState([]);
+  const [qualityUploads, setQualityUploads] = useState(() => (movie?.streaming?.qualities || []).map((quality) => ({ id: `saved-${quality}`, quality, file: null, existing: true })));
   const [coverPreview, setCoverPreview] = useState(movie?.coverUrl ? withBasePath(movie.coverUrl) : '');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState({});
@@ -446,7 +451,10 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
     event.target.value = '';
     if (!file) return;
     setFiles((value) => ({ ...value, [event.target.name]: file }));
-    if (event.target.name === 'video' && file.name.toLowerCase().endsWith('.zip')) setHlsFiles([]);
+    if (event.target.name === 'video') {
+      setQualityUploads([]);
+      if (file.name.toLowerCase().endsWith('.zip')) setHlsFiles([]);
+    }
     if (event.target.name === 'subtitleZip') setFiles((value) => ({ ...value, subtitleZip: file, subtitleEn: null, subtitleRu: null }));
     if (event.target.name === 'subtitleEn' || event.target.name === 'subtitleRu') setFiles((value) => ({ ...value, [event.target.name]: file, subtitleZip: null }));
     setProgress((value) => ({ ...value, [event.target.name]: 0 }));
@@ -458,9 +466,11 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
   }
 
   function changeSource(type) {
+    if (type === sourceType) return;
     setSourceType(type);
     setFiles((value) => ({ ...value, video: null }));
     setHlsFiles([]);
+    setQualityUploads([]);
     setProgress({});
     setError('');
   }
@@ -471,7 +481,8 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
     setError('');
     setProgress({});
     const missingFiles = [];
-    if (!files.video && (!currentStatus.video || Boolean(movie?.streaming?.hls) !== (sourceType === 'hls'))) missingFiles.push(sourceType === 'hls' ? 'HLS ZIP or M3U8 playlist' : t('admin_movie_file'));
+    const selectedQualityUploads = qualityUploads.filter((item) => item.file);
+    if (!files.video && selectedQualityUploads.length === 0 && (!currentStatus.video || Boolean(movie?.streaming?.hls) !== (sourceType === 'hls'))) missingFiles.push(sourceType === 'hls' ? 'HLS ZIP, M3U8 playlist, or quality ZIP' : t('admin_movie_file'));
     if (sourceType === 'hls' && files.video && !files.video.name.toLowerCase().endsWith('.zip') && hlsFiles.length === 0) missingFiles.push('HLS segment files');
     if (missingFiles.length) {
       setBusy(false);
@@ -487,12 +498,13 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
     });
     Object.entries(files).forEach(([key, file]) => file && body.append(key, file));
     if (sourceType === 'hls' && !files.video?.name.toLowerCase().endsWith('.zip')) hlsFiles.forEach((file) => body.append('hlsFiles', file));
+    selectedQualityUploads.forEach((item) => body.append(`quality_${item.quality}`, item.file));
 
     try {
       const saved = await apiUpload(movie ? `/api/admin/movies/${movie.id}` : '/api/admin/movies', {
         method: movie ? 'PATCH' : 'POST',
         body,
-        onProgress: (value) => setProgress(getPerFileProgress(value, { ...files, hlsFiles }))
+        onProgress: (value) => setProgress(getPerFileProgress(value, { ...files, hlsFiles, qualityUploads: selectedQualityUploads.map((item) => item.file) }))
       });
       onSaved(saved);
     } catch (err) {
@@ -519,10 +531,11 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
         <label>{t('admin_original_title')}<input name="originalTitle" value={form.originalTitle} onChange={updateField} /></label>
         <label>{t('admin_year')}<input name="year" value={form.year} onChange={updateField} /></label>
         <label>{t('admin_country')}<select className="multi-select" multiple value={form.countries} onChange={updateCountries}>{countryOptions.map((country) => <option key={country} value={country}>{country}</option>)}</select></label>
-        <label className="wide">{t('admin_genres')}<div className="genre-chips">{genres.map((genre) => <button type="button" key={genre} className={form.genres.includes(genre) ? 'active' : ''} onClick={() => toggleGenre(genre)}>{translateGenre(locale, genre)}</button>)}</div></label>
-        <label>{t('admin_type')}<select name="type" value={form.type} onChange={updateField}><option value="Movie">{t('movie_type_movie')}</option><option value="Series">{t('movie_type_series')}</option><option value="Animation">{t('movie_type_animation')}</option></select></label>
+        <label className="wide">{t('admin_genres')}<div className="genre-chips">{genres.map((genre) => <button type="button" key={genre.code} className={form.genres.includes(genre.code) ? 'active' : ''} onClick={() => toggleGenre(genre.code)}>{translateGenre(locale, genre.code, genres)}</button>)}</div></label>
+        <label>{t('admin_type')}<select name="type" value={form.type} onChange={updateField}><option value="Movie">{t('movie_type_movie')}</option><option value="Series">{t('movie_type_series')}</option><option value="Cartoon">{t('movie_type_cartoon')}</option></select></label>
         <label>{t('admin_duration')}<div className="duration-picker"><select name="durationHours" value={form.durationHours} onChange={updateField}>{range(0, 6).map((hour) => <option key={hour} value={hour}>{hour} h</option>)}</select><select name="durationMinutes" value={form.durationMinutes} onChange={updateField}>{range(0, 59).map((minute) => <option key={minute} value={minute}>{minute} min</option>)}</select></div></label>
         <label>{t('admin_rating')}<input name="rating" value={form.rating} onChange={updateField} /></label>
+        <label>{t('understanding_difficulty')}<select name="difficulty" value={form.difficulty} onChange={updateField}><option value="easy">{translateDifficulty(locale, 'easy')}</option><option value="medium">{translateDifficulty(locale, 'medium')}</option><option value="hard">{translateDifficulty(locale, 'hard')}</option></select></label>
         <label className="wide">{t('admin_description')}<textarea name="description" rows="5" value={form.description} onChange={updateField} /></label>
       </div>
 
@@ -536,6 +549,14 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
         <FileBox icon={<Film />} name="video" label={sourceType === 'hls' ? 'HLS ZIP or main M3U8' : t('admin_movie_file')} accept={sourceType === 'hls' ? '.zip,.m3u8,application/zip,application/vnd.apple.mpegurl' : 'video/mp4,video/webm,video/x-matroska,.mp4,.webm,.mkv'} required={!currentStatus.video || !currentSourceMatches} file={files.video} current={currentSourceMatches ? currentFiles.video : null} progress={progress.video} onChange={updateFile} onRemove={() => removeFile('video')} />
         {sourceType === 'hls' && !files.video?.name.toLowerCase().endsWith('.zip') ? <div className="hls-file-box"><label htmlFor="hls-files"><Upload size={22} /><span><strong>HLS media files</strong><small>{hlsFiles.length ? `${hlsFiles.length} files · ${formatFileSize(hlsSize)}` : 'Choose all segments and companion playlists'}</small></span></label><input id="hls-files" type="file" multiple accept=".ts,.m4s,.mp4,.aac,.mp3,.vtt,.key,.m3u8" onChange={(event) => { setHlsFiles(Array.from(event.target.files)); event.target.value = ''; }} />{hlsFiles.length ? <div className="hls-file-summary"><span>{hlsFiles.slice(0, 3).map((file) => file.name).join(' · ')}{hlsFiles.length > 3 ? ` · +${hlsFiles.length - 3} more` : ''}</span><button type="button" onClick={() => setHlsFiles([])}>Clear</button></div> : null}{typeof progress.hlsFiles === 'number' && progress.hlsFiles > 0 ? <Progress value={progress.hlsFiles} /> : null}</div> : null}
       </div>
+      {sourceType === 'hls' ? <div className="quality-upload-panel">
+        <div className="quality-upload-head"><div><strong>Separate quality ZIPs</strong><small>Add one ZIP per resolution. Each ZIP must contain one playable M3U8 playlist and all of its segments.</small></div><button type="button" disabled={qualityUploads.length >= movieQualityOptions.length} onClick={() => { setFiles((value) => ({ ...value, video: null })); setHlsFiles([]); addQualityUpload(setQualityUploads, qualityUploads); }}><Plus size={16} /> Add quality</button></div>
+        {qualityUploads.length ? <div className="quality-upload-list">{qualityUploads.map((item) => <div className="quality-upload-row" key={item.id}>
+          <select aria-label="Video quality" value={item.quality} disabled={item.existing} onChange={(event) => setQualityUploads((value) => value.map((entry) => entry.id === item.id ? { ...entry, quality: event.target.value } : entry))}>{movieQualityOptions.map((quality) => <option key={quality} value={quality} disabled={qualityUploads.some((entry) => entry.id !== item.id && entry.quality === quality)}>{quality === '2160p' ? '2160p · 4K' : quality === '1440p' ? '1440p · 2K' : quality}</option>)}</select>
+          <label className={item.existing && !item.file ? 'quality-saved' : ''}><Upload size={17} /><span>{item.file ? item.file.name : item.existing ? `${item.quality} uploaded · choose ZIP to replace` : `${item.quality} HLS ZIP`}</span><input type="file" accept=".zip,application/zip" onChange={(event) => { const file = event.target.files[0] || null; setQualityUploads((value) => value.map((entry) => entry.id === item.id ? { ...entry, file } : entry)); event.target.value = ''; }} /></label>
+          {item.existing ? item.file ? <button type="button" className="quality-remove" onClick={() => setQualityUploads((value) => value.map((entry) => entry.id === item.id ? { ...entry, file: null } : entry))}>Cancel</button> : <span className="quality-current">Saved</span> : <button type="button" className="quality-remove" onClick={() => setQualityUploads((value) => value.filter((entry) => entry.id !== item.id))}>Remove</button>}
+        </div>)}</div> : <p className="quality-upload-empty">Use this when your converter produces separate 360p, 720p, 1080p, or 4K ZIP bundles. Kinochy creates the adaptive master playlist automatically.</p>}
+      </div> : null}
 
       <div className="admin-editor-section-head"><span className="admin-editor-step">03</span><div><h3>Artwork & subtitle bundle</h3><p>Upload one subtitle ZIP for both languages, or select the files separately.</p></div></div>
       <div className="upload-grid">
@@ -580,7 +601,7 @@ function AdminUsersList({ requestConfirm }) {
     <div className="admin-users">
       <div className="admin-table-wrap">
         <div className="admin-list-head">
-          <h2>Users</h2>
+          <div><span className="admin-section-kicker">Account management</span><h2>Users</h2><p>{users.length} registered account{users.length === 1 ? '' : 's'} · {selected.length} selected</p></div>
           <div className="admin-actions">
             <Link className="primary" to="/admin/users/new">
               <Plus size={16} /> Add user
@@ -725,7 +746,7 @@ function movieToForm(movie) {
     year: String(movie.year || new Date().getFullYear()),
     countries: parseCountries(movie.country),
     genres: movie.genres?.length ? movie.genres : ['Drama'],
-    type: movie.type || 'Movie',
+    type: movie.type === 'Animation' ? 'Cartoon' : movie.type || 'Movie',
     durationHours: String(Math.floor(duration / 60)),
     durationMinutes: String(duration % 60),
     rating: String(movie.rating || '8.0'),
@@ -763,6 +784,15 @@ function getPerFileProgress(totalProgress, files) {
 function formatFileSize(bytes) {
   if (bytes < 1024 * 1024) return `${Math.ceil(bytes / 1024)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const movieQualityOptions = ['144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p'];
+
+function addQualityUpload(setQualityUploads, currentUploads) {
+  const preferredOrder = ['720p', '1080p', '480p', '360p', '2160p', '1440p', '240p', '144p'];
+  const quality = preferredOrder.find((option) => !currentUploads.some((item) => item.quality === option));
+  if (!quality) return;
+  setQualityUploads((value) => [...value, { id: `${Date.now()}-${quality}`, quality, file: null }]);
 }
 
 function parseDurationMinutes(value) {

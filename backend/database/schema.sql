@@ -54,8 +54,61 @@ ALTER TABLE movies ADD COLUMN IF NOT EXISTS genres JSONB NOT NULL DEFAULT '[]'::
 CREATE TABLE IF NOT EXISTS genres (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT UNIQUE NOT NULL,
+  name_tm TEXT,
+  name_en TEXT,
+  name_ru TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE genres ADD COLUMN IF NOT EXISTS name_tm TEXT;
+ALTER TABLE genres ADD COLUMN IF NOT EXISTS name_en TEXT;
+ALTER TABLE genres ADD COLUMN IF NOT EXISTS name_ru TEXT;
+
+INSERT INTO genres(name,name_tm,name_en,name_ru) VALUES
+  ('Action','Aksiýon','Action','Боевик'),
+  ('Adventure','Başdan geçirme','Adventure','Приключения'),
+  ('Cartoon','Multfilm','Cartoon','Мультфильм'),
+  ('Comedy','Komediýa','Comedy','Комедия'),
+  ('Crime','Jenaýat','Crime','Криминал'),
+  ('Documentary','Dokumental','Documentary','Документальный'),
+  ('Drama','Drama','Drama','Драма'),
+  ('Family','Maşgala','Family','Семейный'),
+  ('Fantasy','Fantastika','Fantasy','Фэнтези'),
+  ('History','Taryhy','History','Исторический'),
+  ('Horror','Gorky','Horror','Ужасы'),
+  ('Mystery','Syrly','Mystery','Детектив'),
+  ('Romance','Söýgi','Romance','Романтика'),
+  ('Sci-Fi','Ylmy-fantastika','Sci-Fi','Научная фантастика'),
+  ('Thriller','Triller','Thriller','Триллер'),
+  ('War','Uruş','War','Военный')
+ON CONFLICT(name) DO UPDATE SET name_tm=excluded.name_tm,name_en=excluded.name_en,name_ru=excluded.name_ru;
+
+UPDATE movies movie SET genres=normalized.value
+FROM (
+  SELECT source.id,COALESCE(jsonb_agg(to_jsonb(COALESCE(canonical.name,item.value))),'[]'::jsonb) AS value
+  FROM movies source
+  CROSS JOIN LATERAL jsonb_array_elements_text(source.genres) item(value)
+  LEFT JOIN genres canonical ON lower(item.value) IN (lower(canonical.name),lower(canonical.name_tm),lower(canonical.name_en),lower(canonical.name_ru))
+  GROUP BY source.id
+) normalized
+WHERE movie.id=normalized.id AND movie.genres IS DISTINCT FROM normalized.value;
+
+UPDATE movies movie SET genre=canonical.name
+FROM genres canonical
+WHERE movie.genre IS NOT NULL
+  AND lower(movie.genre) IN (lower(canonical.name),lower(canonical.name_tm),lower(canonical.name_en),lower(canonical.name_ru))
+  AND movie.genre IS DISTINCT FROM canonical.name;
+
+UPDATE movies SET type='Cartoon' WHERE lower(type) IN ('animation','animations','cartoon','cartoons');
+UPDATE movies movie SET genres=normalized.value
+FROM (
+  SELECT source.id,jsonb_agg(to_jsonb(CASE WHEN lower(item.value) IN ('animation','анимация','animasiýa','cartoon','мультфильм','multfilm') THEN 'Cartoon' ELSE item.value END)) AS value
+  FROM movies source CROSS JOIN LATERAL jsonb_array_elements_text(source.genres) item(value)
+  GROUP BY source.id
+) normalized
+WHERE movie.id=normalized.id AND movie.genres IS DISTINCT FROM normalized.value;
+UPDATE movies SET genre='Cartoon' WHERE lower(genre) IN ('animation','анимация','animasiýa','cartoon','мультфильм','multfilm');
+DELETE FROM genres WHERE name='Animation';
 
 CREATE TABLE IF NOT EXISTS subtitles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
