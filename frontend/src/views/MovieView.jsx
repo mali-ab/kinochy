@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { moviePosterFallback } from '../api/client';
 import { useAddComment, useComments, useFavoriteStatus, useMovie, useRecommendations, useRemoveComment, useSaveVocabularyWord, useSeasons, useSubtitles, useToggleFavorite, useWordTranslations } from '../api/hooks.jsx';
+import { movieUrl, withLocale } from '../catalog/urls';
 import MoviePlayer from '../player/MoviePlayer.jsx';
 import { translateAccent, translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
 import { useSession } from '../ui/session.jsx';
@@ -93,7 +94,7 @@ export default function MovieView({ slug }) {
     <section className="movie-page">
       <div className="movie-detail">
         <div className="detail-poster" style={!movie.coverUrl ? { background: moviePosterFallback(movie) } : undefined}>
-          {movie.coverUrl ? <Image className="detail-poster-image" src={movie.coverUrl} alt={movie.title} fill priority sizes="(max-width: 980px) 90vw, 380px" /> : null}
+          {movie.coverUrl ? <Image className="detail-poster-image" src={movie.coverUrl} alt={movie.title}  priority width={400} height={600} /> : null}
           {!movie.coverUrl ? <span>{movie.title}</span> : null}
         </div>
         <div className="detail-copy">
@@ -152,7 +153,7 @@ export default function MovieView({ slug }) {
           {seasons.length ? seasons.filter((season) => season.number === activeSeason).map((season) => (
             <div className="movie-season" key={season.number}>
               <div className="movie-episode-list">{season.episodes.map((episode,index) => (
-                <Link className="movie-episode" key={episode.id} href={`/movies/${episode.slug}`}>
+                <Link className="movie-episode" key={episode.id} href={movieUrl(locale, { slug: episode.slug, type: movie.type })}>
                   <span className="movie-episode-check"><Check size={15} /></span>
                   <span className="movie-episode-label">{t('movie_episode')} {episode.episodeNumber}</span>
                   <span className="movie-episode-play"><Play size={16} fill="currentColor" /></span>
@@ -169,7 +170,7 @@ export default function MovieView({ slug }) {
       <section className="movie-extras" aria-labelledby="movie-recommended-title">
         <div className="movie-extras-heading"><span className="movie-extras-kicker">Kinochy picks</span><h2 id="movie-recommended-title">You may also like</h2></div>
         {recommendations.length ? <div className="movie-recommendations">{recommendations.map((item) => (
-          <Link className="movie-recommendation" href={`/movies/${item.slug}`} key={item.id}>
+          <Link className="movie-recommendation" href={movieUrl(locale, item)} key={item.id}>
             <span className="movie-recommendation-poster" style={{ position: 'relative', ...(item.coverUrl ? undefined : { background: moviePosterFallback(item) }) }}>
               {item.coverUrl ? <Image src={item.coverUrl} alt="" fill sizes="120px" /> : <span>{item.title?.charAt(0)}</span>}
             </span>
@@ -184,7 +185,7 @@ export default function MovieView({ slug }) {
           <label htmlFor="movie-comment-body">{viewer.username}</label>
           <textarea id="movie-comment-body" value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} maxLength={1000} rows={3} placeholder={t('movie_comment_placeholder')} />
           <div><span>{commentDraft.length}/1000</span><button disabled={addComment.isPending || !commentDraft.trim()}><Send size={16} /> {addComment.isPending ? t('movie_comment_pending') : t('movie_comment_submit')}</button></div>
-        </form> : <p className="movie-comment-signin"><Link href="/login">{t('login')}</Link> {t('movie_comment_signin')}</p>}
+        </form> : <p className="movie-comment-signin"><Link href={withLocale(locale, '/login')}>{t('login')}</Link> {t('movie_comment_signin')}</p>}
         {commentError ? <p className="form-error" role="alert">{commentError}</p> : null}
         {comments.length ? <div className="movie-comment-list">{comments.map((comment) => (
           <article className="movie-comment" key={comment.id}>

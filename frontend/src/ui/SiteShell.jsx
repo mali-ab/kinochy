@@ -1,20 +1,25 @@
 'use client';
 
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Check, ChevronDown, Clapperboard, Crown, Film, Globe2, Heart, LayoutDashboard, LoaderCircle, LogOut, Search, Tv } from 'lucide-react';
 import { logout as logoutUser } from '../api/endpoints';
+import { catalogUrl, categoryKeys, categoryLabelKey, homeUrl, parsePathname, withLocale } from '../catalog/urls';
 import logo from '../../public/kinochy_favicon.png';
 import { LocaleProvider, useLocale } from './locale.jsx';
 import { SessionProvider, useSession } from './session.jsx';
 
-export default function SiteShell({ children }) {
+/**
+ * Public site chrome. The locale comes from the [locale] route segment.
+ * @param {{ locale: 'tm' | 'en' | 'ru', children: import('react').ReactNode }} props
+ */
+export default function SiteShell({ locale, children }) {
   return (
     <SessionProvider>
-      <LocaleProvider>
+      <LocaleProvider initialLocale={locale}>
         <SiteChrome>{children}</SiteChrome>
       </LocaleProvider>
     </SessionProvider>
@@ -26,14 +31,14 @@ function SiteChrome({ children }) {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const languageRef = useRef(null);
-  const { user, admin, checking, setUser } = useSession();
+  const { user, admin, setUser } = useSession();
   const { locale, setLocale, t, languageOptions, saving: languageSaving } = useLocale();
   const router = useRouter();
   const pathname = usePathname();
+  const parsed = parsePathname(pathname);
+  const isVocabulary = parsed.segments[0] === 'vocabulary';
+  const isFavorites = parsed.segments[0] === 'favorites';
   const queryClient = useQueryClient();
-  const isVocabulary = pathname === '/vocabulary';
-  const isFavorites = pathname === '/favorites';
-  const publicHeader = checking;
 
   useEffect(() => {
     if (!languageOpen) return undefined;
@@ -56,7 +61,7 @@ function SiteChrome({ children }) {
 
   function submitSearch(event) {
     event.preventDefault();
-    router.push(`/?search=${encodeURIComponent(search)}`);
+    router.push(`${homeUrl(locale)}?search=${encodeURIComponent(search)}`);
   }
 
   function changeLanguage(nextLocale) {
@@ -69,58 +74,57 @@ function SiteChrome({ children }) {
     setUser(null);
     queryClient.invalidateQueries({ queryKey: ['users'] });
     setConfirmLogout(false);
-    router.push('/');
+    router.push(homeUrl(locale));
   }
 
   return (
     <div className="app">
-      <header className={`topbar ${publicHeader ? 'public-topbar' : ''}`}>
-        <Link href="/" className="brand" aria-label="Kinochy home">
+      {/* The static chrome (nav, search, language picker) renders on the server
+          so crawlers see the localized category links; only the auth-dependent
+          actions wait for the session check. */}
+      <header className="topbar">
+        <Link href={homeUrl(locale)} className="brand" aria-label="Kinochy home">
           <span className="brand-mark">
             <Image src={logo} alt="" width={32} height={32} priority />
           </span>
           <span>Kinochy</span>
         </Link>
 
-        {!checking ? (
-          <>
-            <NavTabs user={user} t={t} isFavorites={isFavorites} isVocabulary={isVocabulary} />
-            <form className="search" onSubmit={submitSearch}>
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('search_placeholder')} />
-              <button aria-label={t('search_label')}>
-                <Search size={21} />
-              </button>
-            </form>
-            <div ref={languageRef} className={`language-picker language-switch ${languageOpen ? 'open' : ''}`}>
-              <button type="button" className="language-switch-trigger" onClick={() => setLanguageOpen((value) => !value)} aria-label={t('language_label')} aria-haspopup="menu" aria-expanded={languageOpen} disabled={languageSaving}>
-                {languageSaving ? <LoaderCircle className="language-spinner" size={17} /> : <Globe2 size={17} />}
-                <span><small>{t('language_label')}</small><strong>{languageOptions.find((option) => option.code === locale)?.label}</strong></span>
-                <ChevronDown className="language-chevron" size={15} />
-              </button>
-              {languageOpen ? <div className="language-menu" role="menu">{languageOptions.map((option) => (
-                <button type="button" role="menuitemradio" aria-checked={locale === option.code} className={locale === option.code ? 'active' : ''} key={option.code} onClick={() => changeLanguage(option.code)}>
-                  <span className="language-code">{option.code.toUpperCase()}</span><span><strong>{option.label}</strong><small>{languageNativeHint(option.code)}</small></span>{locale === option.code ? <Check size={16} /> : null}
-                </button>
-              ))}</div> : null}
-            </div>
-            {user ? <div className="top-actions">
-              {admin ? (
-                <Link className="admin-route-link" href="/admin">
-                  <LayoutDashboard size={17} /> {t('nav_admin')}
-                </Link>
-              ) : null}
-              <Link className={`subscription-nav ${user.subscription?.hasFullAccess ? 'premium' : ''}`} href="/subscription"><Crown size={16} /> {user.subscription?.hasFullAccess ? 'Premium' : 'Free'}</Link>
-              <span className="username-pill"><span className="user-avatar">{(user?.username || user?.email || 'U').charAt(0).toUpperCase()}</span><span className="user-name">{user?.username || user?.email}</span></span>
-              <button className="logout-button" onClick={() => setConfirmLogout(true)} aria-label={t('logout_title')}>
-                <LogOut size={18} />
-              </button>
-            </div> : <div className="guest-actions">
-              {admin ? <Link className="admin-route-link" href="/admin"><LayoutDashboard size={17} /> {t('nav_admin')}</Link> : null}
-              <Link className="guest-login" href="/login">{t('login')}</Link>
-              <Link className="guest-signup" href="/signup">{t('signup')}</Link>
-            </div>}
-          </>
-        ) : null}
+        <NavMenu activeCategory={parsed.category} locale={locale} user={user} t={t} isFavorites={isFavorites} isVocabulary={isVocabulary} />
+        <form className="search" onSubmit={submitSearch}>
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('search_placeholder')} />
+          <button aria-label={t('search_label')}>
+            <Search size={21} />
+          </button>
+        </form>
+        <div ref={languageRef} className={`language-picker language-switch ${languageOpen ? 'open' : ''}`}>
+          <button type="button" className="language-switch-trigger" onClick={() => setLanguageOpen((value) => !value)} aria-label={t('language_label')} aria-haspopup="menu" aria-expanded={languageOpen} disabled={languageSaving}>
+            {languageSaving ? <LoaderCircle className="language-spinner" size={17} /> : <Globe2 size={17} />}
+            <span><small>{t('language_label')}</small><strong>{languageOptions.find((option) => option.code === locale)?.label}</strong></span>
+            <ChevronDown className="language-chevron" size={15} />
+          </button>
+          {languageOpen ? <div className="language-menu" role="menu">{languageOptions.map((option) => (
+            <button type="button" role="menuitemradio" aria-checked={locale === option.code} className={locale === option.code ? 'active' : ''} key={option.code} onClick={() => changeLanguage(option.code)}>
+              <span className="language-code">{option.code.toUpperCase()}</span><span><strong>{option.label}</strong><small>{languageNativeHint(option.code)}</small></span>{locale === option.code ? <Check size={16} /> : null}
+            </button>
+          ))}</div> : null}
+        </div>
+        {user ? <div className="top-actions">
+          {admin ? (
+            <Link className="admin-route-link" href="/admin">
+              <LayoutDashboard size={17} /> {t('nav_admin')}
+            </Link>
+          ) : null}
+          <Link className={`subscription-nav ${user.subscription?.hasFullAccess ? 'premium' : ''}`} href={withLocale(locale, '/subscription')}><Crown size={16} /> {user.subscription?.hasFullAccess ? 'Premium' : 'Free'}</Link>
+          <span className="username-pill"><span className="user-avatar">{(user?.username || user?.email || 'U').charAt(0).toUpperCase()}</span><span className="user-name">{user?.username || user?.email}</span></span>
+          <button className="logout-button" onClick={() => setConfirmLogout(true)} aria-label={t('logout_title')}>
+            <LogOut size={18} />
+          </button>
+        </div> : <div className="guest-actions">
+          {admin ? <Link className="admin-route-link" href="/admin"><LayoutDashboard size={17} /> {t('nav_admin')}</Link> : null}
+          <Link className="guest-login" href={withLocale(locale, '/login')}>{t('login')}</Link>
+          <Link className="guest-signup" href={withLocale(locale, '/signup')}>{t('signup')}</Link>
+        </div>}
       </header>
 
       <main>{children}</main>
@@ -143,27 +147,18 @@ function SiteChrome({ children }) {
   );
 }
 
-function NavTabs(props) {
-  return (
-    <Suspense fallback={<NavMenu {...props} category="Movie" />}>
-      <NavTabsWithParams {...props} />
-    </Suspense>
-  );
-}
-
-function NavTabsWithParams(props) {
-  const searchParams = useSearchParams();
-  return <NavMenu {...props} category={searchParams.get('category') || 'Movie'} />;
-}
-
-function NavMenu({ category, user, t, isFavorites, isVocabulary }) {
+function NavMenu({ activeCategory, locale, user, t, isFavorites, isVocabulary }) {
+  const icons = { Movie: <Film size={16} />, Series: <Tv size={16} />, Cartoon: <Clapperboard size={16} /> };
   return (
     <nav className="nav-tabs">
-      <Link className={category === 'Movie' && !isVocabulary && !isFavorites ? 'selected' : ''} href="/?category=Movie"><Film size={16} /><span>{t('nav_movies')}</span></Link>
-      <Link className={category === 'Series' ? 'selected' : ''} href="/?category=Series"><Tv size={16} /><span>{t('nav_series')}</span></Link>
-      <Link className={category === 'Cartoon' ? 'selected' : ''} href="/?category=Cartoon"><Clapperboard size={16} /><span>{t('nav_cartoons')}</span></Link>
-      {user ? <Link className={isFavorites ? 'selected' : ''} href="/favorites"><Heart size={16} /><span>{t('nav_favorites')}</span></Link> : null}
-      {user ? <Link className={isVocabulary ? 'selected' : ''} href="/vocabulary"><BookOpen size={16} /><span>{t('nav_vocabulary')}</span></Link> : null}
+      {categoryKeys.map((key) => (
+        <Link key={key} className={activeCategory === key && !isVocabulary && !isFavorites ? 'selected' : ''} href={catalogUrl(locale, { category: key })}>
+          {icons[key]}
+          <span>{t(categoryLabelKey(key))}</span>
+        </Link>
+      ))}
+      {user ? <Link className={isFavorites ? 'selected' : ''} href={withLocale(locale, '/favorites')}><Heart size={16} /><span>{t('nav_favorites')}</span></Link> : null}
+      {user ? <Link className={isVocabulary ? 'selected' : ''} href={withLocale(locale, '/vocabulary')}><BookOpen size={16} /><span>{t('nav_vocabulary')}</span></Link> : null}
     </nav>
   );
 }

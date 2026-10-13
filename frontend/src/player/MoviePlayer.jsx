@@ -2,6 +2,7 @@ import { ArrowUpDown, Cast, Check, Crown, Expand, Gauge, Grid2x2, Pause, Play, S
 import Link from 'next/link';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
+import { withLocale } from '../catalog/urls';
 import { withBasePath } from '../paths';
 import { useLocale } from '../ui/locale.jsx';
 
@@ -12,7 +13,7 @@ const fontMap = {
 };
 
 export default function MoviePlayer({ movie, subtitles, access }) {
-  const { t } = useLocale();
+  const { locale, t } = useLocale();
   const stageRef = useRef(null);
   const videoRef = useRef(null);
   const listRef = useRef(null);
@@ -796,7 +797,7 @@ export default function MoviePlayer({ movie, subtitles, access }) {
             <p>Free preview ended</p>
             <h3>Continue watching with Kinochy Premium</h3>
             <small>You watched the free 10-minute preview. Premium unlocks every movie without limits.</small>
-            <Link href="/subscription">View subscription</Link>
+            <Link href={withLocale(locale, '/subscription')}>View subscription</Link>
           </div>
         ) : null}
 

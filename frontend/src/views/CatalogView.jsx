@@ -3,38 +3,45 @@
 import { ArrowUpRight, Heart, Play, Sparkles, Star } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { moviePosterFallback } from '../api/client';
 import { useFavoriteIds, useGenres, useMovies } from '../api/hooks.jsx';
+import { catalogUrl, categoryLabelKey, movieUrl, normalizeType } from '../catalog/urls';
 import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
 import { CatalogFeatureSkeleton, MovieCardSkeleton } from '../ui/skeleton.jsx';
 
-export default function HomeView() {
-  const searchParams = useSearchParams();
-  const [filters, setFilters] = useState({ genre: 'all', year: 'all', sort: 'popular' });
+/**
+ * Shared catalog listing for the home library, the category routes and their
+ * genre routes. Category and genre live in the URL, not in local state.
+ * @param {{ categoryKey?: 'Movie' | 'Series' | 'Cartoon' | null, genreCode?: string | null }} props
+ */
+export default function CatalogView({ categoryKey = null, genreCode = null }) {
   const { locale, t } = useLocale();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const search = searchParams.get('search') || '';
-  const category = searchParams.get('category') || 'Movie';
+  const [filters, setFilters] = useState({ year: 'all', sort: 'popular' });
   const { movies, loading } = useMovies(search);
   const genres = useGenres();
   const favoriteIds = useFavoriteIds();
 
-  const filterOptions = useMemo(() => {
-    const byCategory = movies.filter((movie) => normalizeType(movie.type) === category);
-    return {
-      genres,
-      years: unique(byCategory.map((movie) => movie.year).filter(Boolean)).sort((a, b) => b - a)
-    };
-  }, [movies, category, genres]);
+  const pool = useMemo(
+    () => (categoryKey ? movies.filter((movie) => normalizeType(movie.type) === categoryKey) : movies),
+    [movies, categoryKey]
+  );
+
+  const filterOptions = useMemo(
+    () => ({ genres, years: unique(pool.map((movie) => movie.year).filter(Boolean)).sort((a, b) => b - a) }),
+    [pool, genres]
+  );
 
   const catalog = useMemo(() => {
-    const filtered = movies
-      .filter((movie) => normalizeType(movie.type) === category)
+    const filtered = pool
       .filter((movie) => {
-        if (filters.genre === 'all') return true;
-        const genres = movie.genres?.length ? movie.genres : movie.genre ? [movie.genre] : [];
-        return genres.includes(filters.genre);
+        if (!genreCode) return true;
+        const movieGenres = movie.genres?.length ? movie.genres : movie.genre ? [movie.genre] : [];
+        return movieGenres.includes(genreCode);
       })
       .filter((movie) => filters.year === 'all' || String(movie.year) === filters.year);
 
@@ -46,15 +53,25 @@ export default function HomeView() {
       if (filters.sort === 'za') return b.title.localeCompare(a.title);
       return Number(b.rating || 0) - Number(a.rating || 0);
     });
-  }, [movies, category, filters]);
+  }, [pool, genreCode, filters]);
 
   function updateFilter(event) {
     setFilters((value) => ({ ...value, [event.target.name]: event.target.value }));
   }
 
-  const emptyLabel = category === 'Series' ? t('empty_series') : category === 'Cartoon' ? t('empty_cartoons') : t('empty_movies');
-  const featured = !search ? catalog.find((movie) => movie.coverUrl) || catalog[0] : null;
-  const categoryLabel = category === 'Series' ? t('nav_series') : category === 'Cartoon' ? t('nav_cartoons') : t('nav_movies');
+  // Genre selection is reflected in the URL instead of local state.
+  function changeGenre(event) {
+    if (!categoryKey) return;
+    const value = event.target.value;
+    const path = value === 'all' ? catalogUrl(locale, { category: categoryKey }) : catalogUrl(locale, { category: categoryKey, genre: value });
+    router.push(search ? `${path}?search=${encodeURIComponent(search)}` : path);
+  }
+
+  const emptyLabel = categoryKey === 'Series' ? t('empty_series') : categoryKey === 'Cartoon' ? t('empty_cartoons') : t('empty_movies');
+  const featured = !search && !genreCode ? pool.find((movie) => movie.coverUrl) || pool[0] : null;
+  const categoryLabel = categoryKey ? t(categoryLabelKey(categoryKey)) : t('catalog_library');
+  const heading = search ? t('catalog_results') : genreCode ? `${translateGenre(locale, genreCode, genres)} · ${categoryLabel}` : categoryLabel;
+  const eyebrow = heading === t('catalog_library') ? '' : t('catalog_library');
   const featuredGenre = featured?.genres?.[0] || featured?.genre;
 
   return (
@@ -81,7 +98,7 @@ export default function HomeView() {
             </div>
             <h1>{featured.title}</h1>
             {featured.description ? <p>{featured.description}</p> : null}
-            <Link className="feature-play" href={`/movies/${featured.slug}`}><Play size={18} fill="currentColor" /> {t('catalog_watch')}</Link>
+            <Link className="feature-play" href={movieUrl(locale, featured)}><Play size={18} fill="currentColor" /> {t('catalog_watch')}</Link>
           </div>
           {!featured.coverUrl ? <div className="feature-monogram" aria-hidden="true">{featured.title?.charAt(0)}</div> : null}
         </div>
@@ -89,21 +106,23 @@ export default function HomeView() {
 
       <div className="catalog-heading">
         <div>
-          <span className="catalog-eyebrow">{t('catalog_library')}</span>
-          <h2>{search ? t('catalog_results') : categoryLabel}</h2>
+          {eyebrow ? <span className="catalog-eyebrow">{eyebrow}</span> : null}
+          <h2>{heading}</h2>
         </div>
         {!loading ? <span className="catalog-count">{catalog.length} {t('catalog_titles')}</span> : null}
       </div>
 
       <div className="filters">
-        <select className="filter-select genre-filter" name="genre" value={filters.genre} onChange={updateFilter} aria-label={t('filters_genre')}>
-          <option value="all">{t('filters_genre')}</option>
-          {filterOptions.genres.map((genre) => (
-            <option key={genre.code} value={genre.code}>
-              {translateGenre(locale, genre.code, genres)}
-            </option>
-          ))}
-        </select>
+        {categoryKey ? (
+          <select className="filter-select genre-filter" name="genre" value={genreCode || 'all'} onChange={changeGenre} aria-label={t('filters_genre')}>
+            <option value="all">{t('filters_genre')}</option>
+            {filterOptions.genres.map((genre) => (
+              <option key={genre.code} value={genre.code}>
+                {translateGenre(locale, genre.code, genres)}
+              </option>
+            ))}
+          </select>
+        ) : null}
         <select className="filter-select year-filter" name="year" value={filters.year} onChange={updateFilter} aria-label={t('filters_year')}>
           <option value="all">{t('filters_year')}</option>
           {filterOptions.years.map((year) => (
@@ -126,7 +145,7 @@ export default function HomeView() {
 
       <div className="movie-grid" aria-busy={loading || undefined}>
         {loading ? Array.from({ length: 12 }, (_, index) => <MovieCardSkeleton key={index} />) : catalog.map((movie, index) => (
-          <Link key={movie.id} className="movie-card" href={`/movies/${movie.slug}`}>
+          <Link key={movie.id} className="movie-card" href={movieUrl(locale, movie)}>
             <div className="poster" style={!movie.coverUrl ? { background: moviePosterFallback(movie) } : undefined}>
               {movie.coverUrl ? (
                 <Image
@@ -175,10 +194,4 @@ export default function HomeView() {
 
 function unique(values) {
   return [...new Set(values)];
-}
-
-function normalizeType(type) {
-  if (type === 'Animation' || type === 'Animations' || type === 'Cartoon' || type === 'Cartoons') return 'Cartoon';
-  if (type === 'Series') return 'Series';
-  return 'Movie';
 }

@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { moviePosterFallback } from '../api/client';
 import { useFavorites } from '../api/hooks.jsx';
+import { movieUrl } from '../catalog/urls';
 import { translateGenre, useLocale } from '../ui/locale.jsx';
 import { MovieCardSkeleton } from '../ui/skeleton.jsx';
 
@@ -25,7 +26,7 @@ export default function FavoritesView() {
 
       <div className="movie-grid" aria-busy={loading || undefined}>
         {loading ? Array.from({ length: 8 }, (_, index) => <MovieCardSkeleton key={index} />) : movies.map((movie, index) => (
-          <Link key={movie.id} className="movie-card" href={`/movies/${movie.slug}`}>
+          <Link key={movie.id} className="movie-card" href={movieUrl(locale, movie)}>
             <div className="poster" style={!movie.coverUrl ? { background: moviePosterFallback(movie) } : undefined}>
               {movie.coverUrl ? (
                 <Image
