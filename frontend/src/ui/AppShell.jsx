@@ -1,10 +1,9 @@
-import { Check, ChevronDown, Crown, Globe2, LayoutDashboard, LoaderCircle, LogOut, Search } from 'lucide-react';
+import { BookOpen, Check, ChevronDown, Clapperboard, Crown, Film, Globe2, Heart, LayoutDashboard, LoaderCircle, LogOut, Search, Tv } from 'lucide-react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { withBasePath } from '../paths';
 import { getLanguageOptions, LocaleProvider, t } from './locale.jsx';
-import AuthPage from '../views/AuthPage.jsx';
 
 export default function AppShell() {
   const [search, setSearch] = useState('');
@@ -21,8 +20,7 @@ export default function AppShell() {
   const isVocabulary = location.pathname === '/vocabulary';
   const isFavorites = location.pathname === '/favorites';
   const category = new URLSearchParams(location.search).get('category') || 'Movie';
-  const loggedOut = !checking && !user;
-  const publicHeader = checking || !user;
+  const publicHeader = checking;
   const languageOptions = getLanguageOptions();
 
   useEffect(() => {
@@ -110,14 +108,14 @@ export default function AppShell() {
             <span>Kinochy</span>
           </Link>
 
-          {user ? (
+          {!checking ? (
             <>
               <nav className="nav-tabs">
-                <Link className={category === 'Movie' && !isVocabulary && !isFavorites ? 'selected' : ''} to="/?category=Movie">{tr('nav_movies')}</Link>
-                <Link className={category === 'Series' ? 'selected' : ''} to="/?category=Series">{tr('nav_series')}</Link>
-                <Link className={category === 'Cartoon' ? 'selected' : ''} to="/?category=Cartoon">{tr('nav_cartoons')}</Link>
-                <Link className={isFavorites ? 'selected' : ''} to="/favorites">{tr('nav_favorites')}</Link>
-                <Link className={isVocabulary ? 'selected' : ''} to="/vocabulary">{tr('nav_vocabulary')}</Link>
+                <Link className={category === 'Movie' && !isVocabulary && !isFavorites ? 'selected' : ''} to="/?category=Movie"><Film size={16} /><span>{tr('nav_movies')}</span></Link>
+                <Link className={category === 'Series' ? 'selected' : ''} to="/?category=Series"><Tv size={16} /><span>{tr('nav_series')}</span></Link>
+                <Link className={category === 'Cartoon' ? 'selected' : ''} to="/?category=Cartoon"><Clapperboard size={16} /><span>{tr('nav_cartoons')}</span></Link>
+                {user ? <Link className={isFavorites ? 'selected' : ''} to="/favorites"><Heart size={16} /><span>{tr('nav_favorites')}</span></Link> : null}
+                {user ? <Link className={isVocabulary ? 'selected' : ''} to="/vocabulary"><BookOpen size={16} /><span>{tr('nav_vocabulary')}</span></Link> : null}
               </nav>
               <form className="search" onSubmit={submitSearch}>
                 <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tr('search_placeholder')} />
@@ -137,28 +135,27 @@ export default function AppShell() {
                   </button>
                 ))}</div> : null}
               </div>
-              <div className="top-actions">
+              {user ? <div className="top-actions">
                 {admin ? (
                   <Link className="admin-route-link" to="/admin">
                     <LayoutDashboard size={17} /> {tr('nav_admin')}
                   </Link>
                 ) : null}
                 <Link className={`subscription-nav ${user.subscription?.hasFullAccess ? 'premium' : ''}`} to="/subscription"><Crown size={16} /> {user.subscription?.hasFullAccess ? 'Premium' : 'Free'}</Link>
-                <span className="username-pill">{user?.username || user?.email}</span>
+                <span className="username-pill"><span className="user-avatar">{(user?.username || user?.email || 'U').charAt(0).toUpperCase()}</span><span className="user-name">{user?.username || user?.email}</span></span>
                 <button className="logout-button" onClick={() => setConfirmLogout(true)} aria-label={tr('logout_title')}>
                   <LogOut size={18} />
                 </button>
-              </div>
+              </div> : <div className="guest-actions">
+                {admin ? <Link className="admin-route-link" to="/admin"><LayoutDashboard size={17} /> {tr('nav_admin')}</Link> : null}
+                <Link className="guest-login" to="/login">{tr('login')}</Link>
+                <Link className="guest-signup" to="/signup">{tr('signup')}</Link>
+              </div>}
             </>
-          ) : null}
-          {admin && !user ? (
-            <Link className="admin-route-link" to="/admin">
-              <LayoutDashboard size={17} /> {tr('nav_admin')}
-            </Link>
           ) : null}
         </header>
 
-        <main>{checking ? <div className="status" /> : loggedOut ? <AuthPage embedded onAuth={setUser} /> : <Outlet />}</main>
+        <main>{checking ? <div className="status" /> : <Outlet context={{ user, onAuth: setUser }} />}</main>
 
         {confirmLogout ? (
           <div className="modal-backdrop" onClick={() => setConfirmLogout(false)}>

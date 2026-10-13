@@ -4,7 +4,7 @@ import { api } from '../api';
 
 export default function SubscriptionPage() {
   const [user, setUser] = useState(null);
-  useEffect(() => { api('/api/users/me').then((data) => setUser(data.user || null)); }, []);
+  useEffect(() => { api('/api/users/me').then((data) => setUser(data.user || null)).catch(() => setUser(null)); }, []);
   const premium = Boolean(user?.subscription?.hasFullAccess);
 
   return (

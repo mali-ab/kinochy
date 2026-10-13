@@ -1,4 +1,4 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useOutletContext } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { api } from '../api';
@@ -43,7 +43,7 @@ function clearPendingVerification() {
   } catch {}
 }
 
-export default function AuthPage({ mode = 'login', embedded = false, onAuth = () => {} }) {
+export default function AuthPage({ mode = 'login', embedded = false, onAuth = null }) {
   const [panel, setPanel] = useState(mode === 'signup' ? 'signup' : 'login');
   const [form, setForm] = useState(() => cloneAuthForm());
   const [verification, setVerification] = useState({ flow: 'signup', email: '', username: '', code: '', expiresAt: '', canResendAt: 0 });
@@ -52,6 +52,7 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth = ()
   const [busy, setBusy] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const navigate = useNavigate();
+  const shell = useOutletContext() || {};
   const { t } = useLocale();
 
   useEffect(() => {
@@ -129,7 +130,7 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth = ()
           body: JSON.stringify({ email: verification.email, code: verification.code })
         });
         clearPendingVerification();
-        onAuth?.(data.user);
+        (onAuth || shell.onAuth)?.(data.user);
         if (!embedded) navigate('/');
         return;
       }
@@ -151,7 +152,7 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth = ()
         method: 'POST',
         body: JSON.stringify({ email: form.email, password: form.password })
       });
-      onAuth?.(data.user);
+      (onAuth || shell.onAuth)?.(data.user);
       if (!embedded) navigate('/');
     } catch (err) {
       setError(err.message);
