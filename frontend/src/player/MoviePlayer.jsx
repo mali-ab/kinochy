@@ -1,6 +1,7 @@
 import { ArrowUpDown, Cast, Check, Crown, Expand, Gauge, Grid2x2, Pause, Play, Settings, Volume1, Volume2, VolumeX } from 'lucide-react';
+import Link from 'next/link';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { api } from '../api';
+import { api } from '../api/client';
 import { withBasePath } from '../paths';
 import { useLocale } from '../ui/locale.jsx';
 
@@ -795,7 +796,7 @@ export default function MoviePlayer({ movie, subtitles, access }) {
             <p>Free preview ended</p>
             <h3>Continue watching with Kinochy Premium</h3>
             <small>You watched the free 10-minute preview. Premium unlocks every movie without limits.</small>
-            <a href={withBasePath('/subscription')}>View subscription</a>
+            <Link href="/subscription">View subscription</Link>
           </div>
         ) : null}
 

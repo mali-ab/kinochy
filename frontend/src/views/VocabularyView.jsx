@@ -1,23 +1,18 @@
+'use client';
+
 import { BookText, Trash2, Volume1 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { api } from '../api';
+import { useRemoveVocabularyWord, useVocabulary } from '../api/hooks.jsx';
 import { useLocale } from '../ui/locale.jsx';
+import { VocabularySkeleton } from '../ui/skeleton.jsx';
 
-export default function VocabularyPage() {
+export default function VocabularyView() {
   const { t } = useLocale();
-  const [words, setWords] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { words, loading } = useVocabulary();
+  const removeWordMutation = useRemoveVocabularyWord();
   const [active, setActive] = useState(null);
   const [voices, setVoices] = useState([]);
   const [accent, setAccent] = useState('us');
-
-  useEffect(() => {
-    setLoading(true);
-    api('/api/users/vocabulary')
-      .then((data) => setWords(Array.isArray(data) ? data : []))
-      .catch(() => setWords([]))
-      .finally(() => setLoading(false));
-  }, []);
 
   useEffect(() => {
     const synth = getSpeechSynthesis();
@@ -31,10 +26,9 @@ export default function VocabularyPage() {
     return () => synth.removeEventListener('voiceschanged', loadVoices);
   }, []);
 
-  async function removeWord(id) {
-    await api(`/api/users/vocabulary/${id}`, { method: 'DELETE' });
-    setWords((current) => current.filter((entry) => entry.id !== id));
+  function removeWord(id) {
     setActive((current) => (current?.id === id ? null : current));
+    removeWordMutation.mutate(id);
   }
 
   const columns = useMemo(() => {
@@ -47,7 +41,7 @@ export default function VocabularyPage() {
 
   return (
     <section className="catalog-page vocabulary-page">
-      {loading ? <div className="status">{t('auth_wait')}</div> : null}
+      {loading ? <VocabularySkeleton /> : null}
       {!loading && !words.length ? (
         <div className="vocabulary-empty">
           <BookText size={34} />

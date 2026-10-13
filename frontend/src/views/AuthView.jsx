@@ -1,8 +1,12 @@
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+'use client';
+
 import { Eye, EyeOff } from 'lucide-react';
-import { api } from '../api';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { forgotPassword, login, resendVerification, resetPassword, signup, verifyEmail, verifyPasswordReset } from '../api/endpoints';
 import { useLocale } from '../ui/locale.jsx';
+import { useSession } from '../ui/session.jsx';
 
 const initialForm = {
   username: '',
@@ -43,7 +47,7 @@ function clearPendingVerification() {
   } catch {}
 }
 
-export default function AuthPage({ mode = 'login', embedded = false, onAuth = null }) {
+export default function AuthView({ mode = 'login', embedded = false }) {
   const [panel, setPanel] = useState(mode === 'signup' ? 'signup' : 'login');
   const [form, setForm] = useState(() => cloneAuthForm());
   const [verification, setVerification] = useState({ flow: 'signup', email: '', username: '', code: '', expiresAt: '', canResendAt: 0 });
@@ -51,8 +55,8 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth = nu
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [visiblePasswords, setVisiblePasswords] = useState({});
-  const navigate = useNavigate();
-  const shell = useOutletContext() || {};
+  const router = useRouter();
+  const { setUser } = useSession();
   const { t } = useLocale();
 
   useEffect(() => {
@@ -96,64 +100,46 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth = nu
     try {
       if (panel === 'signup') {
         validateSignup(form, t);
-        const data = await api('/api/users/signup', {
-          method: 'POST',
-          body: JSON.stringify({ username: form.username, email: form.email, password: form.password })
-        });
+        const data = await signup({ username: form.username, email: form.email, password: form.password });
         openVerificationPanel('signup', data.pending);
         return;
       }
 
       if (panel === 'forgot') {
         if (!isValidEmail(form.email)) throw new Error(t('auth_invalid_email'));
-        const data = await api('/api/users/forgot-password', {
-          method: 'POST',
-          body: JSON.stringify({ email: form.email })
-        });
+        const data = await forgotPassword(form.email);
         openVerificationPanel('forgot', data.pending);
         return;
       }
 
       if (panel === 'verify') {
         if (verification.flow === 'forgot') {
-          await api('/api/users/verify-password-reset', {
-            method: 'POST',
-            body: JSON.stringify({ email: verification.email, code: verification.code })
-          });
+          await verifyPasswordReset({ email: verification.email, code: verification.code });
           clearPendingVerification();
           setPanel('reset');
           return;
         }
 
-        const data = await api('/api/users/verify-email', {
-          method: 'POST',
-          body: JSON.stringify({ email: verification.email, code: verification.code })
-        });
+        const data = await verifyEmail({ email: verification.email, code: verification.code });
         clearPendingVerification();
-        (onAuth || shell.onAuth)?.(data.user);
-        if (!embedded) navigate('/');
+        setUser(data.user);
+        if (!embedded) router.push('/');
         return;
       }
 
       if (panel === 'reset') {
         if (!isStrongPassword(form.newPassword)) throw new Error(t('auth_strong_password'));
         if (form.newPassword !== form.confirmNewPassword) throw new Error(t('auth_password_mismatch'));
-        await api('/api/users/reset-password', {
-          method: 'POST',
-          body: JSON.stringify({ email: verification.email, code: verification.code, password: form.newPassword })
-        });
+        await resetPassword({ email: verification.email, code: verification.code, password: form.newPassword });
         clearPendingVerification();
         setForm(cloneAuthForm());
         setPanel('login');
         return;
       }
 
-      const data = await api('/api/users/login', {
-        method: 'POST',
-        body: JSON.stringify({ email: form.email, password: form.password })
-      });
-      (onAuth || shell.onAuth)?.(data.user);
-      if (!embedded) navigate('/');
+      const data = await login({ email: form.email, password: form.password });
+      setUser(data.user);
+      if (!embedded) router.push('/');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -165,11 +151,7 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth = nu
     setBusy(true);
     setError('');
     try {
-      const path = verification.flow === 'forgot' ? '/api/users/forgot-password' : '/api/users/resend-verification';
-      const data = await api(path, {
-        method: 'POST',
-        body: JSON.stringify({ email: verification.email })
-      });
+      const data = verification.flow === 'forgot' ? await forgotPassword(verification.email) : await resendVerification(verification.email);
       const nextVerification = {
         ...verification,
         expiresAt: data.pending.verificationExpiresAt,
@@ -357,7 +339,7 @@ export default function AuthPage({ mode = 'login', embedded = false, onAuth = nu
           </button>
         )}
 
-        {!embedded ? <Link className="auth-home-link" to="/">{t('auth_back_home')}</Link> : null}
+        {!embedded ? <Link className="auth-home-link" href="/">{t('auth_back_home')}</Link> : null}
       </form>
     </section>
   );

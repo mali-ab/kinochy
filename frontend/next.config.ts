@@ -1,15 +1,19 @@
 import type { NextConfig } from 'next';
+import { apiOrigin } from './src/api/config';
 
 const basePath = normalizeBasePath(process.env.APP_BASE_PATH ?? process.env.NEXT_PUBLIC_BASE_PATH ?? '');
 
 const config: NextConfig = {
-  output: 'export',
   basePath,
-  assetPrefix: basePath || undefined,
-  images: { unoptimized: true },
   poweredByHeader: false,
   reactStrictMode: true,
-  trailingSlash: false
+  trailingSlash: false,
+  async rewrites() {
+    return [
+      { source: '/api/:path*', destination: `${apiOrigin}/api/:path*` },
+      { source: '/media/:path*', destination: `${apiOrigin}/media/:path*` }
+    ];
+  }
 };
 
 function normalizeBasePath(value: string): string {

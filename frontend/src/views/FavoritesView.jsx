@@ -1,22 +1,16 @@
+'use client';
+
 import { Heart, Star } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { api, moviePosterFallback } from '../api';
-import { withBasePath } from '../paths';
+import Image from 'next/image';
+import Link from 'next/link';
+import { moviePosterFallback } from '../api/client';
+import { useFavorites } from '../api/hooks.jsx';
 import { translateGenre, useLocale } from '../ui/locale.jsx';
+import { MovieCardSkeleton } from '../ui/skeleton.jsx';
 
-export default function FavoritesPage() {
-  const [movies, setMovies] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function FavoritesView() {
+  const { favorites: movies, loading } = useFavorites();
   const { locale, t } = useLocale();
-
-  useEffect(() => {
-    setLoading(true);
-    api('/api/users/favorites')
-      .then((data) => setMovies(Array.isArray(data) ? data : []))
-      .catch(() => setMovies([]))
-      .finally(() => setLoading(false));
-  }, []);
 
   return (
     <section className="catalog-page favorites-page">
@@ -27,21 +21,19 @@ export default function FavoritesPage() {
         </div>
       </div>
 
-      {loading ? <div className="status">{t('loading_movies')}</div> : null}
       {!loading && !movies.length ? <div className="empty-state">{t('empty_favorites')}</div> : null}
 
-      <div className="movie-grid">
-        {movies.map((movie, index) => (
-          <Link key={movie.id} className="movie-card" to={`/movies/${movie.slug}`}>
+      <div className="movie-grid" aria-busy={loading || undefined}>
+        {loading ? Array.from({ length: 8 }, (_, index) => <MovieCardSkeleton key={index} />) : movies.map((movie, index) => (
+          <Link key={movie.id} className="movie-card" href={`/movies/${movie.slug}`}>
             <div className="poster" style={!movie.coverUrl ? { background: moviePosterFallback(movie) } : undefined}>
               {movie.coverUrl ? (
-                <img
+                <Image
                   className="poster-image"
-                  src={withBasePath(movie.coverUrl)}
+                  src={movie.coverUrl}
                   alt={movie.title}
-                  loading={index < 4 ? 'eager' : 'lazy'}
-                  decoding="async"
-                  fetchPriority={index < 2 ? 'high' : 'low'}
+                  fill
+                  priority={index < 2}
                   sizes="(max-width: 620px) 45vw, (max-width: 980px) 30vw, 174px"
                 />
               ) : null}

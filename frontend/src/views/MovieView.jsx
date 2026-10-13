@@ -1,144 +1,75 @@
+'use client';
+
 import { ArrowUpRight, Check, Clock3, Heart, MessageCircle, Play, Plus, Send, Star, Trash2, Volume2 } from 'lucide-react';
+import Image from 'next/image';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { api, moviePosterFallback } from '../api';
-import { withBasePath } from '../paths';
+import { moviePosterFallback } from '../api/client';
+import { useAddComment, useComments, useFavoriteStatus, useMovie, useRecommendations, useRemoveComment, useSaveVocabularyWord, useSeasons, useSubtitles, useToggleFavorite, useWordTranslations } from '../api/hooks.jsx';
 import MoviePlayer from '../player/MoviePlayer.jsx';
-import { normalizeSubtitleCues } from '../player/subtitleCues.js';
 import { translateAccent, translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
+import { useSession } from '../ui/session.jsx';
+import { MovieDetailSkeleton } from '../ui/skeleton.jsx';
 
-export default function MoviePage() {
-  const { slug } = useParams();
-  const [movie, setMovie] = useState(null);
-  const [favorite, setFavorite] = useState(false);
-  const [favoriteBusy, setFavoriteBusy] = useState(false);
-  const [favoriteError, setFavoriteError] = useState('');
-  const [subtitles, setSubtitles] = useState({ en: [], ru: [] });
-  const [subtitlesReady, setSubtitlesReady] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [recommendations, setRecommendations] = useState([]);
-  const [seasons, setSeasons] = useState([]);
-  const [comments, setComments] = useState([]);
-  const [viewer, setViewer] = useState(null);
-  const [commentDraft, setCommentDraft] = useState('');
-  const [commentBusy, setCommentBusy] = useState(false);
-  const [commentError, setCommentError] = useState('');
-  const [wordTranslations, setWordTranslations] = useState({});
-  const [savedWords, setSavedWords] = useState(() => new Set());
-  const [activeSeason, setActiveSeason] = useState(1);
+export default function MovieView({ slug }) {
   const { locale, t } = useLocale();
+  const { user: viewer } = useSession();
+  const movieResult = useMovie(slug);
+  const movie = movieResult.movie;
+  const recommendations = useRecommendations(slug);
+  const seasons = useSeasons(slug);
+  const comments = useComments(slug);
+  const { subtitles, ready: subtitlesReady } = useSubtitles(slug);
+  const { favorite } = useFavoriteStatus(movie?.id);
+  const toggleFavorite = useToggleFavorite();
+  const addComment = useAddComment(slug);
+  const removeComment = useRemoveComment(slug);
+  const saveWord = useSaveVocabularyWord();
   const studyWords = useMemo(() => buildStudyWords(subtitles.en), [subtitles.en]);
+  const wordTranslations = useWordTranslations(studyWords);
+  const [activeSeason, setActiveSeason] = useState(1);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentError, setCommentError] = useState('');
+  const [favoriteError, setFavoriteError] = useState('');
+  const [savedWords, setSavedWords] = useState(() => new Set());
 
   useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setMovie(null);
-    setSubtitles({ en: [], ru: [] });
-    setSubtitlesReady(false);
-    api(`/api/movies/${slug}`)
-      .then((movieData) => {
-        if (!active) return;
-        setMovie(movieData);
-        api(`/api/users/favorites/${movieData.id}`)
-          .then((data) => active && setFavorite(Boolean(data.favorite)))
-          .catch(() => active && setFavorite(false));
-      })
-      .finally(() => active && setLoading(false));
-
-    return () => {
-      active = false;
-    };
-  }, [slug]);
-
-  useEffect(() => {
-    let active = true;
-    setWordTranslations({});
-    Promise.allSettled(studyWords.map(async (word) => {
-      const result = await api(`/api/translate?text=${encodeURIComponent(word)}&from=en&to=ru`);
-      return [word, result.translation || ''];
-    })).then((results) => {
-      if (!active) return;
-      setWordTranslations(Object.fromEntries(results.filter((result) => result.status === 'fulfilled').map((result) => result.value)));
-    });
-    return () => { active = false; };
-  }, [studyWords]);
-
-  useEffect(() => {
-    let active = true;
-    setRecommendations([]);
-    setSeasons([]);
-    setComments([]);
-    setViewer(null);
     setCommentDraft('');
     setCommentError('');
-    api(`/api/movies/${slug}/recommendations`).then((data) => active && setRecommendations(Array.isArray(data) ? data : [])).catch(() => {});
-    api(`/api/movies/${slug}/seasons`).then((data) => { if (!active) return; const items = Array.isArray(data) ? data : []; setSeasons(items); if (items[0]) setActiveSeason(items[0].number); }).catch(() => {});
-    api(`/api/movies/${slug}/comments`).then((data) => active && setComments(Array.isArray(data) ? data : [])).catch(() => {});
-    api('/api/users/me').then((data) => active && setViewer(data.user || null)).catch(() => {});
-    return () => { active = false; };
+    setFavoriteError('');
+    setSavedWords(() => new Set());
   }, [slug]);
 
   useEffect(() => {
-    let active = true;
-    Promise.allSettled([api(`/api/movies/${slug}/subtitles/en`), api(`/api/movies/${slug}/subtitles/ru`)]).then((results) => {
-      if (!active) return;
-      const en = normalizeSubtitleCues(results[0].status === 'fulfilled' ? results[0].value : []);
-      const ru = normalizeSubtitleCues(results[1].status === 'fulfilled' ? results[1].value : []);
-      setSubtitles({ en, ru });
-      setSubtitlesReady(true);
-    });
-    return () => {
-      active = false;
-    };
-  }, [slug]);
+    if (seasons.length && !seasons.some((season) => season.number === activeSeason)) setActiveSeason(seasons[0].number);
+  }, [seasons, activeSeason]);
 
-  if (loading) return <div className="status">{t('loading_movie')}</div>;
+  if (movieResult.loading) return <MovieDetailSkeleton />;
   if (!movie) return <div className="status">{t('movie_not_found')}</div>;
 
-  async function toggleFavorite() {
-    if (favoriteBusy) return;
-    const nextFavorite = !favorite;
-    setFavoriteBusy(true);
+  function onToggleFavorite() {
+    if (toggleFavorite.isPending) return;
     setFavoriteError('');
-    setFavorite(nextFavorite);
-    try {
-      const data = await api(`/api/users/favorites/${movie.id}`, {
-        method: nextFavorite ? 'POST' : 'DELETE',
-        body: JSON.stringify({})
-      });
-      setFavorite(Boolean(data.favorite));
-    } catch (error) {
-      setFavorite(!nextFavorite);
-      setFavoriteError(error.message || 'Could not update favorites. Please try again.');
-    } finally {
-      setFavoriteBusy(false);
-    }
+    toggleFavorite.mutate(
+      { movieId: movie.id, nextFavorite: !favorite },
+      { onError: (error) => setFavoriteError(error.message || 'Could not update favorites. Please try again.') }
+    );
   }
 
-  async function postComment(event) {
+  function postComment(event) {
     event.preventDefault();
-    if (!commentDraft.trim() || commentBusy) return;
-    setCommentBusy(true);
+    const body = commentDraft.trim();
+    if (!body || addComment.isPending) return;
     setCommentError('');
-    try {
-      const comment = await api(`/api/movies/${slug}/comments`, { method: 'POST', body: JSON.stringify({ body: commentDraft.trim() }) });
-      setComments((current) => [comment, ...current].slice(0, 50));
-      setCommentDraft('');
-    } catch (error) {
-      setCommentError(error.message || 'Could not post comment.');
-    } finally {
-      setCommentBusy(false);
-    }
+    addComment.mutate(body, {
+      onSuccess: () => setCommentDraft(''),
+      onError: (error) => setCommentError(error.message || 'Could not post comment.')
+    });
   }
 
-  async function deleteComment(id) {
+  function deleteComment(id) {
     setCommentError('');
-    try {
-      await api(`/api/movies/${slug}/comments/${id}`, { method: 'DELETE' });
-      setComments((current) => current.filter((comment) => comment.id !== id));
-    } catch (error) {
-      setCommentError(error.message || 'Could not delete comment.');
-    }
+    removeComment.mutate(id, { onError: (error) => setCommentError(error.message || 'Could not delete comment.') });
   }
 
   function pronounce(word) {
@@ -149,20 +80,20 @@ export default function MoviePage() {
     window.speechSynthesis.speak(utterance);
   }
 
-  async function saveStudyWord(word) {
+  function saveStudyWord(word) {
     const translation = wordTranslations[word];
-    if (!translation || savedWords.has(word)) return;
-    try {
-      await api('/api/users/vocabulary', { method: 'POST', body: JSON.stringify({ word, translation, sourceLanguage: 'en', targetLanguage: 'ru' }) });
-      setSavedWords((current) => new Set(current).add(word));
-    } catch { /* Keep the add action available for retry. */ }
+    if (!translation || savedWords.has(word) || saveWord.isPending) return;
+    saveWord.mutate(
+      { word, translation, sourceLanguage: 'en', targetLanguage: 'ru' },
+      { onSuccess: () => setSavedWords((current) => new Set(current).add(word)) }
+    );
   }
 
   return (
     <section className="movie-page">
       <div className="movie-detail">
         <div className="detail-poster" style={!movie.coverUrl ? { background: moviePosterFallback(movie) } : undefined}>
-          {movie.coverUrl ? <img className="detail-poster-image" src={withBasePath(movie.coverUrl)} alt={movie.title} decoding="async" fetchPriority="high" /> : null}
+          {movie.coverUrl ? <Image className="detail-poster-image" src={movie.coverUrl} alt={movie.title} fill priority sizes="(max-width: 980px) 90vw, 380px" /> : null}
           {!movie.coverUrl ? <span>{movie.title}</span> : null}
         </div>
         <div className="detail-copy">
@@ -170,7 +101,7 @@ export default function MoviePage() {
           <h1>{movie.title}</h1>
           <p className="original">{movie.originalTitle}</p>
           <div className="actions">
-            <button className={favorite ? 'active-favorite' : ''} disabled={favoriteBusy} onClick={toggleFavorite}>
+            <button className={favorite ? 'active-favorite' : ''} disabled={toggleFavorite.isPending} onClick={onToggleFavorite}>
               <Heart size={18} fill={favorite ? 'currentColor' : 'none'} /> {favorite ? t('remove_favorites') : t('add_favorites')}
             </button>
           </div>
@@ -221,7 +152,7 @@ export default function MoviePage() {
           {seasons.length ? seasons.filter((season) => season.number === activeSeason).map((season) => (
             <div className="movie-season" key={season.number}>
               <div className="movie-episode-list">{season.episodes.map((episode,index) => (
-                <Link className="movie-episode" key={episode.id} to={`/movies/${episode.slug}`}>
+                <Link className="movie-episode" key={episode.id} href={`/movies/${episode.slug}`}>
                   <span className="movie-episode-check"><Check size={15} /></span>
                   <span className="movie-episode-label">{t('movie_episode')} {episode.episodeNumber}</span>
                   <span className="movie-episode-play"><Play size={16} fill="currentColor" /></span>
@@ -238,9 +169,9 @@ export default function MoviePage() {
       <section className="movie-extras" aria-labelledby="movie-recommended-title">
         <div className="movie-extras-heading"><span className="movie-extras-kicker">Kinochy picks</span><h2 id="movie-recommended-title">You may also like</h2></div>
         {recommendations.length ? <div className="movie-recommendations">{recommendations.map((item) => (
-          <Link className="movie-recommendation" to={`/movies/${item.slug}`} key={item.id}>
-            <span className="movie-recommendation-poster" style={!item.coverUrl ? { background: moviePosterFallback(item) } : undefined}>
-              {item.coverUrl ? <img src={withBasePath(item.coverUrl)} alt="" loading="lazy" /> : <span>{item.title?.charAt(0)}</span>}
+          <Link className="movie-recommendation" href={`/movies/${item.slug}`} key={item.id}>
+            <span className="movie-recommendation-poster" style={{ position: 'relative', ...(item.coverUrl ? undefined : { background: moviePosterFallback(item) }) }}>
+              {item.coverUrl ? <Image src={item.coverUrl} alt="" fill sizes="120px" /> : <span>{item.title?.charAt(0)}</span>}
             </span>
             <span className="movie-recommendation-copy"><strong>{item.title}</strong><small>{item.year || '—'} · {item.genres?.[0] ? translateGenre(locale, item.genres[0]) : item.genre || item.type}</small></span>
           </Link>
@@ -252,8 +183,8 @@ export default function MoviePage() {
         {viewer ? <form className="movie-comment-form" onSubmit={postComment}>
           <label htmlFor="movie-comment-body">{viewer.username}</label>
           <textarea id="movie-comment-body" value={commentDraft} onChange={(event) => setCommentDraft(event.target.value)} maxLength={1000} rows={3} placeholder={t('movie_comment_placeholder')} />
-          <div><span>{commentDraft.length}/1000</span><button disabled={commentBusy || !commentDraft.trim()}><Send size={16} /> {commentBusy ? t('movie_comment_pending') : t('movie_comment_submit')}</button></div>
-        </form> : <p className="movie-comment-signin"><Link to="/login">{t('login')}</Link> {t('movie_comment_signin')}</p>}
+          <div><span>{commentDraft.length}/1000</span><button disabled={addComment.isPending || !commentDraft.trim()}><Send size={16} /> {addComment.isPending ? t('movie_comment_pending') : t('movie_comment_submit')}</button></div>
+        </form> : <p className="movie-comment-signin"><Link href="/login">{t('login')}</Link> {t('movie_comment_signin')}</p>}
         {commentError ? <p className="form-error" role="alert">{commentError}</p> : null}
         {comments.length ? <div className="movie-comment-list">{comments.map((comment) => (
           <article className="movie-comment" key={comment.id}>

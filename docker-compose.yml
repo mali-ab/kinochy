@@ -34,11 +34,27 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-kinochy}:${POSTGRES_PASSWORD:-kinochy}@postgres:5432/${POSTGRES_DB:-kinochy}
       LIBRETRANSLATE_URL: ${LIBRETRANSLATE_URL:-https://translate.mstdn.social/translate}
       LIBRETRANSLATE_API_KEY: ${LIBRETRANSLATE_API_KEY:-}
-    ports:
-      - "4000:4000"
+    expose:
+      - "4000"
     volumes:
       - app_storage:/app/storage
       - ./backend/storage/preloaded:/app/storage/preloaded:ro
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend-runtime
+      args:
+        NODE_IMAGE: node:22-alpine
+    container_name: kinochy_frontend
+    restart: unless-stopped
+    depends_on:
+      - app
+    environment:
+      API_ORIGIN: http://app:4000
+    ports:
+      - "4000:5173"
 
 volumes:
   postgres_data:

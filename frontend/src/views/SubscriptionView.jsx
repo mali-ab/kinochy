@@ -1,10 +1,10 @@
-import { Check, Crown, PlayCircle } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { api } from '../api';
+'use client';
 
-export default function SubscriptionPage() {
-  const [user, setUser] = useState(null);
-  useEffect(() => { api('/api/users/me').then((data) => setUser(data.user || null)).catch(() => setUser(null)); }, []);
+import { Check, Crown, PlayCircle } from 'lucide-react';
+import { useViewer } from '../api/hooks.jsx';
+
+export default function SubscriptionView() {
+  const user = useViewer();
   const premium = Boolean(user?.subscription?.hasFullAccess);
 
   return (

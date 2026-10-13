@@ -1,6 +1,13 @@
-import { createContext, useContext } from 'react';
+'use client';
+
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { changeLanguage as changeLanguageRequest } from '../api/endpoints';
+import { useOptionalSession } from './session.jsx';
 
 const LocaleContext = createContext(null);
+const localeStorageKey = 'kinochy_locale';
+const fallbackLocale = 'tm';
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 const localeNames = {
   tm: 'Türkmençe',
@@ -560,7 +567,54 @@ const translations = {
   }
 };
 
-export function LocaleProvider({ value, children }) {
+export function LocaleProvider({ children }) {
+  const session = useOptionalSession();
+  const user = session?.user ?? null;
+  const setUser = session?.setUser ?? null;
+  const [locale, setLocaleState] = useState(fallbackLocale);
+  const [saving, setSaving] = useState(false);
+
+  // Reads the stored preference before the first paint to avoid a locale flash.
+  useIsomorphicLayoutEffect(() => {
+    try {
+      setLocaleState(window.localStorage.getItem(localeStorageKey) || fallbackLocale);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (user?.language) setLocaleState(user.language);
+  }, [user?.language]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(localeStorageKey, locale);
+    } catch {}
+  }, [locale]);
+
+  const changeLanguage = useCallback(async (nextLocale) => {
+    if (!nextLocale || nextLocale === locale) return;
+    const previousLocale = locale;
+    setLocaleState(nextLocale);
+    if (!user || !setUser) return;
+    setSaving(true);
+    try {
+      const data = await changeLanguageRequest(nextLocale);
+      setUser(data.user);
+    } catch {
+      setLocaleState(previousLocale);
+    } finally {
+      setSaving(false);
+    }
+  }, [locale, user, setUser]);
+
+  const value = useMemo(() => ({
+    locale,
+    setLocale: changeLanguage,
+    saving,
+    t: (key) => t(locale, key),
+    languageOptions: getLanguageOptions()
+  }), [locale, changeLanguage, saving]);
+
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
 }
 

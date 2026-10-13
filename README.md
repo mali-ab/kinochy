@@ -4,7 +4,7 @@ Kinochy is a movie-based English learning platform with streaming playback, inte
 
 ## Stack
 
-- Frontend: Next.js + TypeScript
+- Frontend: Next.js App Router (React 19) served by a Node.js runtime
 - Styling: Tailwind CSS
 - Backend: ASP.NET Core 8 Web API
 - Database: PostgreSQL
@@ -23,8 +23,8 @@ Kinochy is a movie-based English learning platform with streaming playback, inte
 
 ## Project Structure
 
-- `frontend/app/`: Next.js App Router, metadata, and global Tailwind styles
-- `frontend/src/`: typed API utilities and feature components
+- `frontend/app/`: Next.js App Router routes, layouts, metadata, and global Tailwind styles
+- `frontend/src/`: typed API utilities, site views, movie player, and admin components
 - `frontend/public/`: static assets such as icons and logos
 - `backend/Controllers/`: HTTP API and media endpoints grouped by responsibility
 - `backend/Services/`: authentication, movies, users, translation, and media logic
@@ -71,7 +71,7 @@ Start Next.js from the repository root in terminal 2:
 npm run dev:client
 ```
 
-Open `http://localhost:5173`. Check the API at `http://localhost:4000/api/health`. The frontend uses `http://localhost:4000` for API requests in development; if you use another API address, set `NEXT_PUBLIC_API_URL` before starting Next.js.
+Open `http://localhost:5173`. Check the API at `http://localhost:4000/api/health`. The Next.js server proxies `/api` and `/media` to `API_ORIGIN` (default `http://localhost:4000`) so browser requests stay same-origin; set `API_ORIGIN` before starting Next.js when the API runs at another address.
 
 For local runs, set the backend variables in the process environment as shown above. `.env` is read by Docker Compose, but the ASP.NET app does not load that file on its own. Uploaded files are kept in `backend/storage/uploads`.
 
@@ -123,6 +123,8 @@ docker compose logs -f app
 
 - `http://YOUR_DOMAIN_OR_IP:4000`
 
+Compose runs two application containers: `frontend` (Next.js, public on port 4000) and `app` (ASP.NET Core API, reachable inside the Compose network as `http://app:4000`). The Next.js server proxies `/api` and `/media` requests to the API container, so the browser only talks to port 4000.
+
 ## Persistent Data
 
 Docker volumes keep production data between restarts:
@@ -150,7 +152,7 @@ Docker uses port `4000`, the root path `/`, an 8 GiB upload limit, PostgreSQL 16
 - For an adaptive HLS movie, choose **HLS bundle** and upload a ZIP containing `master.m3u8` plus its rendition folders. ZIP paths and playlist references are validated before extraction. A flat `.m3u8` playlist with separately selected media files is also supported.
 - Subtitle uploads accept separate SRT/VTT files or one ZIP bundle. Include `en`/`english` and `ru`/`russian` in filenames, for example `movie.en.srt` and `movie.ru.srt`; archive paths, file count, and extracted size are validated.
 - To convert an existing video into this format, see the [local movie tools](scripts/local_movies/README.md).
-- `NEXT_PUBLIC_API_URL`: optional frontend API address; defaults to `http://localhost:4000` in development
+- `API_ORIGIN`: address the Next.js server proxies `/api` and `/media` requests to; defaults to `http://localhost:4000` outside Docker and is set to `http://app:4000` by Compose
 
 ## Production Notes
 
@@ -170,6 +172,7 @@ npm run format:check
 docker compose down
 docker compose up -d --build
 docker compose logs -f app
+docker compose logs -f frontend
 docker compose logs -f postgres
 ```
 

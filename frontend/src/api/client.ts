@@ -1,4 +1,4 @@
-import { withBasePath } from './paths';
+import { withBasePath } from '../paths';
 
 export type ApiOptions = RequestInit;
 

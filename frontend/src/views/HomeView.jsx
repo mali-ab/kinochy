@@ -1,36 +1,24 @@
-import { ArrowUpRight, Heart, Play, Sparkles, Star } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
-import { api, moviePosterFallback } from '../api';
-import { withBasePath } from '../paths';
-import { normalizeGenreCatalog, translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
+'use client';
 
-export default function HomePage() {
-  const [searchParams] = useSearchParams();
-  const [movies, setMovies] = useState([]);
-  const [favoriteIds, setFavoriteIds] = useState([]);
-  const [genres, setGenres] = useState([]);
-  const [loading, setLoading] = useState(true);
+import { ArrowUpRight, Heart, Play, Sparkles, Star } from 'lucide-react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
+import { useMemo, useState } from 'react';
+import { moviePosterFallback } from '../api/client';
+import { useFavoriteIds, useGenres, useMovies } from '../api/hooks.jsx';
+import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
+import { CatalogFeatureSkeleton, MovieCardSkeleton } from '../ui/skeleton.jsx';
+
+export default function HomeView() {
+  const searchParams = useSearchParams();
   const [filters, setFilters] = useState({ genre: 'all', year: 'all', sort: 'popular' });
   const { locale, t } = useLocale();
   const search = searchParams.get('search') || '';
   const category = searchParams.get('category') || 'Movie';
-
-  useEffect(() => {
-    setLoading(true);
-    api(`/api/movies?search=${encodeURIComponent(search)}`)
-      .then(setMovies)
-      .finally(() => setLoading(false));
-  }, [search]);
-
-  useEffect(() => {
-    api('/api/genres')
-      .then((data) => setGenres(normalizeGenreCatalog(data)))
-      .catch(() => setGenres([]));
-    api('/api/users/favorites/ids')
-      .then((data) => setFavoriteIds(Array.isArray(data) ? data : []))
-      .catch(() => setFavoriteIds([]));
-  }, []);
+  const { movies, loading } = useMovies(search);
+  const genres = useGenres();
+  const favoriteIds = useFavoriteIds();
 
   const filterOptions = useMemo(() => {
     const byCategory = movies.filter((movie) => normalizeType(movie.type) === category);
@@ -71,9 +59,19 @@ export default function HomePage() {
 
   return (
     <section className="catalog-page">
-      {featured ? (
+      {loading && !search ? <CatalogFeatureSkeleton /> : featured ? (
         <div className="catalog-feature" style={!featured.coverUrl ? { background: moviePosterFallback(featured) } : undefined}>
-          {featured.coverUrl ? <img className="catalog-feature-image" src={withBasePath(featured.coverUrl)} alt="" /> : null}
+          {featured.coverUrl ? (
+            <Image
+              className="catalog-feature-image"
+              src={featured.coverUrl}
+              alt=""
+              fill
+              priority
+              sizes="66vw"
+              style={{ inset: '-50% -2% -50% auto', }}
+            />
+          ) : null}
           <div className="catalog-feature-copy">
             <span className="feature-kicker"><Sparkles size={15} /> {t('catalog_spotlight')}</span>
             <div className="feature-meta">
@@ -83,7 +81,7 @@ export default function HomePage() {
             </div>
             <h1>{featured.title}</h1>
             {featured.description ? <p>{featured.description}</p> : null}
-            <Link className="feature-play" to={`/movies/${featured.slug}`}><Play size={18} fill="currentColor" /> {t('catalog_watch')}</Link>
+            <Link className="feature-play" href={`/movies/${featured.slug}`}><Play size={18} fill="currentColor" /> {t('catalog_watch')}</Link>
           </div>
           {!featured.coverUrl ? <div className="feature-monogram" aria-hidden="true">{featured.title?.charAt(0)}</div> : null}
         </div>
@@ -124,21 +122,19 @@ export default function HomePage() {
         </select>
       </div>
 
-      {loading ? <div className="status">{t('loading_movies')}</div> : null}
       {!loading && !catalog.length ? <div className="empty-state">{emptyLabel}</div> : null}
 
-      <div className="movie-grid">
-        {catalog.map((movie, index) => (
-          <Link key={movie.id} className="movie-card" to={`/movies/${movie.slug}`}>
+      <div className="movie-grid" aria-busy={loading || undefined}>
+        {loading ? Array.from({ length: 12 }, (_, index) => <MovieCardSkeleton key={index} />) : catalog.map((movie, index) => (
+          <Link key={movie.id} className="movie-card" href={`/movies/${movie.slug}`}>
             <div className="poster" style={!movie.coverUrl ? { background: moviePosterFallback(movie) } : undefined}>
               {movie.coverUrl ? (
-                <img
+                <Image
                   className="poster-image"
-                  src={withBasePath(movie.coverUrl)}
+                  src={movie.coverUrl}
                   alt={movie.title}
-                  loading={index < 4 ? 'eager' : 'lazy'}
-                  decoding="async"
-                  fetchPriority={index < 2 ? 'high' : 'low'}
+                  fill
+                  priority={index < 2}
                   sizes="(max-width: 620px) 45vw, (max-width: 980px) 30vw, 174px"
                 />
               ) : null}
