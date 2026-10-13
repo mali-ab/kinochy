@@ -692,6 +692,26 @@ a:visited {
   min-height: 58px;
 }
 
+.fullscreen-controls-hotspot { display: none; }
+.player-shell.controls-hidden:fullscreen .fullscreen-controls-hotspot,
+.player-shell.controls-hidden:-webkit-full-screen .fullscreen-controls-hotspot {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 12;
+  display: block;
+  height: min(16vh, 120px);
+  cursor: default;
+}
+.player-shell:fullscreen .timeline,
+.player-shell:fullscreen .player-controls,
+.player-shell:-webkit-full-screen .timeline,
+.player-shell:-webkit-full-screen .player-controls {
+  position: relative;
+  z-index: 13;
+}
+
 .player-stage {
   position: relative;
   aspect-ratio: 16 / 9;

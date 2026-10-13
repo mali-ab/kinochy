@@ -436,6 +436,7 @@ export default function MoviePlayer({ movie, subtitles, access }) {
     window.clearTimeout(controlsTimerRef.current);
     if (pinned) return;
     controlsTimerRef.current = window.setTimeout(() => {
+      if (videoRef.current?.paused) return;
       setControlsVisible(false);
     }, 5000);
   }
@@ -868,6 +869,8 @@ export default function MoviePlayer({ movie, subtitles, access }) {
           <WordCard lookup={lookup} onClose={() => setLookup(null)} voices={voices} voicePrefs={voicePrefs} setVoicePrefs={setVoicePrefs} onSave={saveLookupWord} />
         ) : null}
       </div>
+
+      <div className="fullscreen-controls-hotspot" aria-hidden="true" onPointerEnter={() => revealControls(controlsPinned)} onPointerMove={() => revealControls(controlsPinned)} />
 
       <div className="timeline">
         <input
