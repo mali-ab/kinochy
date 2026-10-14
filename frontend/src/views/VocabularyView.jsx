@@ -1,13 +1,13 @@
 'use client';
 
 import { BookText, Trash2, Volume1 } from 'lucide-react';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { useRemoveVocabularyWord, useVocabulary } from '../api/hooks.jsx';
-import { useLocale } from '../ui/locale.jsx';
 import { VocabularySkeleton } from '../ui/skeleton.jsx';
 
 export default function VocabularyView() {
-  const { t } = useLocale();
+  const t = useTranslations();
   const { words, loading } = useVocabulary();
   const removeWordMutation = useRemoveVocabularyWord();
   const [active, setActive] = useState(null);

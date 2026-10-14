@@ -3,15 +3,19 @@
 import { Heart, Star } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { moviePosterFallback } from '../api/client';
 import { useFavorites } from '../api/hooks.jsx';
 import { movieUrl } from '../catalog/urls';
-import { translateGenre, useLocale } from '../ui/locale.jsx';
+import { useEnumLabels } from '../i18n/useEnumLabels.jsx';
+import { useLocale } from '../ui/locale.jsx';
 import { MovieCardSkeleton } from '../ui/skeleton.jsx';
 
 export default function FavoritesView() {
   const { favorites: movies, loading } = useFavorites();
-  const { locale, t } = useLocale();
+  const { locale } = useLocale();
+  const { genre: genreLabel } = useEnumLabels();
+  const t = useTranslations();
 
   return (
     <section className="catalog-page favorites-page">
@@ -48,7 +52,7 @@ export default function FavoritesView() {
               </span>
               {!movie.coverUrl ? (
                 <div className="poster-title">
-                  <span>{movie.genres?.[0] ? translateGenre(locale, movie.genres[0]) : movie.genre || 'English'}</span>
+                  <span>{movie.genres?.[0] ? genreLabel(movie.genres[0]) : movie.genre || 'English'}</span>
                   <strong>{movie.title}</strong>
                 </div>
               ) : null}

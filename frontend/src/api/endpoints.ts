@@ -1,6 +1,6 @@
 import { api } from './client';
 import { publicGet, type CacheOptions } from './http';
-import type { AdminIdentity, AdminUser, Genre, Movie, MovieComment, SeriesSeason, SessionUser, TranslateResult, VocabularyEntry } from './types';
+import type { AdminIdentity, Genre, Movie, MovieComment, SeriesSeason, SessionUser, TranslateResult, VocabularyEntry } from './types';
 
 // --- Public catalog (isomorphic: cached on the server, proxied in the browser) ---
 
@@ -120,50 +120,4 @@ export function addComment(slug: string, body: string) {
 
 export function removeComment(slug: string, id: string) {
   return api<{ ok: boolean }>(`/api/movies/${encodeURIComponent(slug)}/comments/${id}`, { method: 'DELETE' });
-}
-
-// --- Admin (browser-only) ---
-
-export function adminLogin(payload: { email: string; password: string }) {
-  return api<{ admin: AdminIdentity }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
-}
-
-export function adminLogout() {
-  return api<{ ok: boolean }>('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
-}
-
-export function getAdminMovie(id: string) {
-  return api<Movie>(`/api/admin/movies/${id}`);
-}
-
-export function deleteMovie(id: string) {
-  return api(`/api/admin/movies/${id}`, { method: 'DELETE', body: JSON.stringify({}) });
-}
-
-export function getAdminUsers() {
-  return api<AdminUser[]>('/api/admin/users');
-}
-
-export function getAdminUser(id: string) {
-  return api<AdminUser>(`/api/admin/users/${id}`);
-}
-
-export function createUser(payload: Record<string, unknown>) {
-  return api<AdminUser>('/api/admin/users', { method: 'POST', body: JSON.stringify(payload) });
-}
-
-export function updateUser(id: string, payload: Record<string, unknown>) {
-  return api<AdminUser>(`/api/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
-}
-
-export function deleteUsers(ids: string[]) {
-  return api<{ ok: boolean }>('/api/admin/users', { method: 'DELETE', body: JSON.stringify({ ids }) });
-}
-
-export function addEpisode(seriesId: string, payload: { movieId: string; seasonNumber: number; episodeNumber: number; title: string | null }) {
-  return api<SeriesSeason[]>(`/api/admin/series/${seriesId}/episodes`, { method: 'POST', body: JSON.stringify(payload) });
-}
-
-export function removeEpisode(seriesId: string, episodeId: string) {
-  return api(`/api/admin/series/${seriesId}/episodes/${episodeId}`, { method: 'DELETE' });
 }

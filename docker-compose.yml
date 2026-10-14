@@ -53,8 +53,27 @@ services:
       - app
     environment:
       API_ORIGIN: http://app:4000
+    expose:
+      - "5173"
+
+  # Single front door: serves the admin SPA under /admin, proxies /api and
+  # /media to the API, and everything else to the Next.js site. One origin
+  # keeps the HttpOnly admin session cookie same-site.
+  edge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: admin-runtime
+      args:
+        NODE_IMAGE: node:22-alpine
+        NGINX_IMAGE: ${NGINX_IMAGE:-nginx:1.27-alpine}
+    container_name: kinochy_edge
+    restart: unless-stopped
+    depends_on:
+      - app
+      - frontend
     ports:
-      - "4000:5173"
+      - "4000:80"
 
 volumes:
   postgres_data:

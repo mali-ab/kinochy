@@ -16,10 +16,7 @@ export const queryKeys = {
   favoriteIds: ['users', 'favorites', 'ids'] as const,
   vocabulary: ['users', 'vocabulary'] as const,
   viewer: ['users', 'me'] as const,
-  adminSession: ['auth', 'me'] as const,
-  adminMovie: (id: string) => ['admin', 'movies', id] as const,
-  adminUser: (id: string) => ['admin', 'users', id] as const,
-  adminUsers: ['admin', 'users'] as const
+  adminSession: ['auth', 'me'] as const
 };
 
 export function moviesQuery(search = '') {
@@ -76,16 +73,4 @@ export function viewerQuery() {
 
 export function adminSessionQuery() {
   return queryOptions({ queryKey: queryKeys.adminSession, queryFn: () => endpoints.getCurrentAdmin(), staleTime: 5 * 60_000 });
-}
-
-export function adminMovieQuery(id: string) {
-  return queryOptions({ queryKey: queryKeys.adminMovie(id), queryFn: () => endpoints.getAdminMovie(id), staleTime: 0 });
-}
-
-export function adminUserQuery(id: string) {
-  return queryOptions({ queryKey: queryKeys.adminUser(id), queryFn: () => endpoints.getAdminUser(id), staleTime: 0 });
-}
-
-export function adminUsersQuery() {
-  return queryOptions({ queryKey: queryKeys.adminUsers, queryFn: () => endpoints.getAdminUsers(), staleTime: 0 });
 }

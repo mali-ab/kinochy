@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Check, ChevronDown, Clapperboard, Crown, Film, Globe2, Heart, LayoutDashboard, LoaderCircle, LogOut, Search, Tv } from 'lucide-react';
 import { logout as logoutUser } from '../api/endpoints';
@@ -13,13 +14,14 @@ import { LocaleProvider, useLocale } from './locale.jsx';
 import { SessionProvider, useSession } from './session.jsx';
 
 /**
- * Public site chrome. The locale comes from the [locale] route segment.
- * @param {{ locale: 'tm' | 'en' | 'ru', children: import('react').ReactNode }} props
+ * Public site chrome. The locale comes from the [locale] route segment and
+ * the layout passes only that locale's messages.
+ * @param {{ locale: 'tm' | 'en' | 'ru', messages: Record<string, unknown>, children: import('react').ReactNode }} props
  */
-export default function SiteShell({ locale, children }) {
+export default function SiteShell({ locale, messages, children }) {
   return (
     <SessionProvider>
-      <LocaleProvider initialLocale={locale}>
+      <LocaleProvider initialLocale={locale} messages={messages}>
         <SiteChrome>{children}</SiteChrome>
       </LocaleProvider>
     </SessionProvider>
@@ -32,7 +34,8 @@ function SiteChrome({ children }) {
   const [languageOpen, setLanguageOpen] = useState(false);
   const languageRef = useRef(null);
   const { user, admin, setUser } = useSession();
-  const { locale, setLocale, t, languageOptions, saving: languageSaving } = useLocale();
+  const { locale, setLocale, languageOptions, saving: languageSaving } = useLocale();
+  const t = useTranslations();
   const router = useRouter();
   const pathname = usePathname();
   const parsed = parsePathname(pathname);
@@ -110,18 +113,14 @@ function SiteChrome({ children }) {
           ))}</div> : null}
         </div>
         {user ? <div className="top-actions">
-          {admin ? (
-            <Link className="admin-route-link" href="/admin">
-              <LayoutDashboard size={17} /> {t('nav_admin')}
-            </Link>
-          ) : null}
+          {admin ? <AdminNavLink t={t} /> : null}
           <Link className={`subscription-nav ${user.subscription?.hasFullAccess ? 'premium' : ''}`} href={withLocale(locale, '/subscription')}><Crown size={16} /> {user.subscription?.hasFullAccess ? 'Premium' : 'Free'}</Link>
           <span className="username-pill"><span className="user-avatar">{(user?.username || user?.email || 'U').charAt(0).toUpperCase()}</span><span className="user-name">{user?.username || user?.email}</span></span>
           <button className="logout-button" onClick={() => setConfirmLogout(true)} aria-label={t('logout_title')}>
             <LogOut size={18} />
           </button>
         </div> : <div className="guest-actions">
-          {admin ? <Link className="admin-route-link" href="/admin"><LayoutDashboard size={17} /> {t('nav_admin')}</Link> : null}
+          {admin ? <AdminNavLink t={t} /> : null}
           <Link className="guest-login" href={withLocale(locale, '/login')}>{t('login')}</Link>
           <Link className="guest-signup" href={withLocale(locale, '/signup')}>{t('signup')}</Link>
         </div>}
@@ -167,4 +166,20 @@ function languageNativeHint(code) {
   if (code === 'tm') return 'Türkmen dili';
   if (code === 'ru') return 'Русский язык';
   return 'English language';
+}
+
+/**
+ * The admin panel is a separate SPA. /admin is served by nginx in production;
+ * during development point NEXT_PUBLIC_ADMIN_URL at the admin dev server
+ * (e.g. http://localhost:5174/admin). A plain anchor forces the full page load
+ * into the other app, so Next's client router never fetches a route that no
+ * longer exists here.
+ */
+function AdminNavLink({ t }) {
+  const href = process.env.NEXT_PUBLIC_ADMIN_URL || '/admin';
+  return (
+    <a className="admin-route-link" href={href}>
+      <LayoutDashboard size={17} /> {t('nav_admin')}
+    </a>
+  );
 }

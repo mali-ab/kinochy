@@ -4,11 +4,13 @@ import { ArrowUpRight, Heart, Play, Sparkles, Star } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useMemo, useState } from 'react';
 import { moviePosterFallback } from '../api/client';
 import { useFavoriteIds, useGenres, useMovies } from '../api/hooks.jsx';
 import { catalogUrl, categoryLabelKey, movieUrl, normalizeType } from '../catalog/urls';
-import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
+import { useEnumLabels } from '../i18n/useEnumLabels.jsx';
+import { useLocale } from '../ui/locale.jsx';
 import { CatalogFeatureSkeleton, MovieCardSkeleton } from '../ui/skeleton.jsx';
 
 /**
@@ -17,7 +19,9 @@ import { CatalogFeatureSkeleton, MovieCardSkeleton } from '../ui/skeleton.jsx';
  * @param {{ categoryKey?: 'Movie' | 'Series' | 'Cartoon' | null, genreCode?: string | null }} props
  */
 export default function CatalogView({ categoryKey = null, genreCode = null }) {
-  const { locale, t } = useLocale();
+  const { locale } = useLocale();
+  const { genre: genreLabel, difficulty: difficultyLabel } = useEnumLabels();
+  const t = useTranslations();
   const router = useRouter();
   const searchParams = useSearchParams();
   const search = searchParams.get('search') || '';
@@ -70,7 +74,7 @@ export default function CatalogView({ categoryKey = null, genreCode = null }) {
   const emptyLabel = categoryKey === 'Series' ? t('empty_series') : categoryKey === 'Cartoon' ? t('empty_cartoons') : t('empty_movies');
   const featured = !search && !genreCode ? pool.find((movie) => movie.coverUrl) || pool[0] : null;
   const categoryLabel = categoryKey ? t(categoryLabelKey(categoryKey)) : t('catalog_library');
-  const heading = search ? t('catalog_results') : genreCode ? `${translateGenre(locale, genreCode, genres)} · ${categoryLabel}` : categoryLabel;
+  const heading = search ? t('catalog_results') : genreCode ? `${genreLabel(genreCode, genres)} · ${categoryLabel}` : categoryLabel;
   const eyebrow = heading === t('catalog_library') ? '' : t('catalog_library');
   const featuredGenre = featured?.genres?.[0] || featured?.genre;
 
@@ -93,7 +97,7 @@ export default function CatalogView({ categoryKey = null, genreCode = null }) {
             <span className="feature-kicker"><Sparkles size={15} /> {t('catalog_spotlight')}</span>
             <div className="feature-meta">
               {featured.year ? <span>{featured.year}</span> : null}
-              {featuredGenre ? <span>{translateGenre(locale, featuredGenre, genres)}</span> : null}
+              {featuredGenre ? <span>{genreLabel(featuredGenre, genres)}</span> : null}
               <span>{featured.type === 'Cartoon' ? t('movie_type_cartoon') : featured.type === 'Series' ? t('movie_type_series') : t('movie_type_movie')}</span>
             </div>
             <h1>{featured.title}</h1>
@@ -118,7 +122,7 @@ export default function CatalogView({ categoryKey = null, genreCode = null }) {
             <option value="all">{t('filters_genre')}</option>
             {filterOptions.genres.map((genre) => (
               <option key={genre.code} value={genre.code}>
-                {translateGenre(locale, genre.code, genres)}
+                {genreLabel(genre.code, genres)}
               </option>
             ))}
           </select>
@@ -157,7 +161,7 @@ export default function CatalogView({ categoryKey = null, genreCode = null }) {
                   sizes="(max-width: 620px) 45vw, (max-width: 980px) 30vw, 174px"
                 />
               ) : null}
-              <span className={`difficulty-poster ${movie.difficulty || 'medium'}`}>{translateDifficulty(locale, movie.difficulty || 'medium')}</span>
+              <span className={`difficulty-poster ${movie.difficulty || 'medium'}`}>{difficultyLabel(movie.difficulty || 'medium')}</span>
               <span className="age">{movie.ageRating || '16+'}</span>
               {favoriteIds.includes(movie.id) ? (
                 <span className="favorite-badge" title={t('nav_favorites')}>
@@ -170,19 +174,19 @@ export default function CatalogView({ categoryKey = null, genreCode = null }) {
               </span>
               {!movie.coverUrl ? (
                 <div className="poster-title">
-                  <span>{movie.genres?.[0] ? translateGenre(locale, movie.genres[0], genres) : movie.genre || 'English'}</span>
+                  <span>{movie.genres?.[0] ? genreLabel(movie.genres[0], genres) : movie.genre || 'English'}</span>
                   <strong>{movie.title}</strong>
                 </div>
               ) : null}
               <span className="poster-hover">
                 <span className="poster-hover-play"><Play size={18} fill="currentColor" /></span>
                 <strong>{movie.title}</strong>
-                <small>{movie.genres?.[0] ? translateGenre(locale, movie.genres[0], genres) : movie.genre || t('movie_type_movie')}<br />{movie.year || '—'}</small>
+                <small>{movie.genres?.[0] ? genreLabel(movie.genres[0], genres) : movie.genre || t('movie_type_movie')}<br />{movie.year || '—'}</small>
               </span>
             </div>
             <div className="movie-card-copy">
               <strong className="movie-title">{movie.title}</strong>
-              <span className="movie-card-details">{movie.year || '—'} <span>·</span> {movie.genres?.[0] ? translateGenre(locale, movie.genres[0], genres) : movie.genre || t('movie_type_movie')} <span>·</span> <span className={`difficulty-inline ${movie.difficulty || 'medium'}`}>{translateDifficulty(locale, movie.difficulty || 'medium')}</span></span>
+              <span className="movie-card-details">{movie.year || '—'} <span>·</span> {movie.genres?.[0] ? genreLabel(movie.genres[0], genres) : movie.genre || t('movie_type_movie')} <span>·</span> <span className={`difficulty-inline ${movie.difficulty || 'medium'}`}>{difficultyLabel(movie.difficulty || 'medium')}</span></span>
               <ArrowUpRight className="movie-card-arrow" size={17} aria-hidden="true" />
             </div>
           </Link>

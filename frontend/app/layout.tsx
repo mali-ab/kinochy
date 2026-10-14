@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = { colorScheme: 'dark', themeColor: '#0F172A' };
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  // The middleware resolves the URL locale; routes outside it (admin) fall back to en.
+  // The middleware resolves the URL locale for the html lang attribute.
   const locale = (await headers()).get('x-next-intl-locale') ?? 'en';
   return <html lang={locale}><body><QueryProvider>{children}</QueryProvider></body></html>;
 }

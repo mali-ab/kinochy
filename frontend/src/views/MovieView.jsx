@@ -3,17 +3,21 @@
 import { ArrowUpRight, Check, Clock3, Heart, MessageCircle, Play, Plus, Send, Star, Trash2, Volume2 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
 import { moviePosterFallback } from '../api/client';
 import { useAddComment, useComments, useFavoriteStatus, useMovie, useRecommendations, useRemoveComment, useSaveVocabularyWord, useSeasons, useSubtitles, useToggleFavorite, useWordTranslations } from '../api/hooks.jsx';
 import { movieUrl, withLocale } from '../catalog/urls';
+import { useEnumLabels } from '../i18n/useEnumLabels.jsx';
 import MoviePlayer from '../player/MoviePlayer.jsx';
-import { translateAccent, translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
+import { useLocale } from '../ui/locale.jsx';
 import { useSession } from '../ui/session.jsx';
 import { MovieDetailSkeleton } from '../ui/skeleton.jsx';
 
 export default function MovieView({ slug }) {
-  const { locale, t } = useLocale();
+  const { locale } = useLocale();
+  const { genre: genreLabel, accent: accentLabel, difficulty: difficultyLabel } = useEnumLabels();
+  const t = useTranslations();
   const { user: viewer } = useSession();
   const movieResult = useMovie(slug);
   const movie = movieResult.movie;
@@ -113,7 +117,7 @@ export default function MovieView({ slug }) {
             <dt>{t('country')}</dt>
             <dd>{movie.country || '—'}</dd>
             <dt>{t('genre')}</dt>
-            <dd className="accent">{movie.genres?.length ? movie.genres.map((genre) => translateGenre(locale, genre)).join(', ') : movie.genre}</dd>
+            <dd className="accent">{movie.genres?.length ? movie.genres.map((genre) => genreLabel(genre)).join(', ') : movie.genre}</dd>
             <dt>{t('duration')}</dt>
             <dd>{formatDuration(movie.duration, locale) || t('uploaded_movie')}</dd>
             <dt>{t('rating')}</dt>
@@ -121,9 +125,9 @@ export default function MovieView({ slug }) {
               <Star size={16} fill="currentColor" /> {Number(movie.rating || 8).toFixed(1)} / 10
             </dd>
             <dt>{t('difficulty')}</dt>
-            <dd><span className={`difficulty-level ${movie.difficulty || 'medium'}`}>{translateDifficulty(locale, movie.difficulty || 'medium')}</span></dd>
+            <dd><span className={`difficulty-level ${movie.difficulty || 'medium'}`}>{difficultyLabel(movie.difficulty || 'medium')}</span></dd>
             <dt>{t('accent')}</dt>
-            <dd>{movie.accent ? translateAccent(locale, movie.accent) : '—'}</dd>
+            <dd>{movie.accent ? accentLabel(movie.accent) : '—'}</dd>
             <dt>{t('subtitles')}</dt>
             <dd>{!subtitlesReady ? '…' : [subtitles.en.length ? t('admin_subtitle_en') : null, subtitles.ru.length ? t('admin_subtitle_ru') : null].filter(Boolean).join(', ') || '—'}</dd>
           </dl>
@@ -174,7 +178,7 @@ export default function MovieView({ slug }) {
             <span className="movie-recommendation-poster" style={{ position: 'relative', ...(item.coverUrl ? undefined : { background: moviePosterFallback(item) }) }}>
               {item.coverUrl ? <Image src={item.coverUrl} alt="" fill sizes="120px" /> : <span>{item.title?.charAt(0)}</span>}
             </span>
-            <span className="movie-recommendation-copy"><strong>{item.title}</strong><small>{item.year || '—'} · {item.genres?.[0] ? translateGenre(locale, item.genres[0]) : item.genre || item.type}</small></span>
+            <span className="movie-recommendation-copy"><strong>{item.title}</strong><small>{item.year || '—'} · {item.genres?.[0] ? genreLabel(item.genres[0]) : item.genre || item.type}</small></span>
           </Link>
         ))}</div> : <p className="movie-extras-empty">{t('movie_recommended_empty')}</p>}
       </section>

@@ -15,14 +15,14 @@ export const routing = defineRouting({
     '/': '/',
     // The default locale (tm) reuses the canonical Latin spellings unprefixed;
     // en adds the /en prefix and ru uses translated segments.
-    '/movies': { tm: '/movies', en: '/movies', ru: '/filmy' },
-    '/series': { tm: '/series', en: '/series', ru: '/serialy' },
-    '/cartoons': { tm: '/cartoons', en: '/cartoons', ru: '/multfilmy' },
-    '/movies/[genre]': { tm: '/movies/[genre]', en: '/movies/[genre]', ru: '/filmy/[genre]' },
-    '/series/[genre]': { tm: '/series/[genre]', en: '/series/[genre]', ru: '/serialy/[genre]' },
-    '/cartoons/[genre]': { tm: '/cartoons/[genre]', en: '/cartoons/[genre]', ru: '/multfilmy/[genre]' },
-    '/movies/[genre]/[slug]': { tm: '/movies/[genre]/[slug]', en: '/movies/[genre]/[slug]', ru: '/filmy/[genre]/[slug]' },
-    '/series/[genre]/[slug]': { tm: '/series/[genre]/[slug]', en: '/series/[genre]/[slug]', ru: '/serialy/[genre]/[slug]' },
-    '/cartoons/[genre]/[slug]': { tm: '/cartoons/[genre]/[slug]', en: '/cartoons/[genre]/[slug]', ru: '/multfilmy/[genre]/[slug]' }
+    '/movies': { tm: '/kinolar', en: '/movies', ru: '/filmy' },
+    '/series': { tm: '/seriallar', en: '/series', ru: '/serialy' },
+    '/cartoons': { tm: '/multifilmler', en: '/cartoons', ru: '/multfilmy' },
+    '/movies/[genre]': { tm: '/kinolar/[genre]', en: '/movies/[genre]', ru: '/filmy/[genre]' },
+    '/series/[genre]': { tm: '/seriallar/[genre]', en: '/series/[genre]', ru: '/serialy/[genre]' },
+    '/cartoons/[genre]': { tm: '/multifilmler/[genre]', en: '/cartoons/[genre]', ru: '/multfilmy/[genre]' },
+    '/movies/[genre]/[slug]': { tm: '/kinolar/[genre]/[slug]', en: '/movies/[genre]/[slug]', ru: '/filmy/[genre]/[slug]' },
+    '/series/[genre]/[slug]': { tm: '/seriallar/[genre]/[slug]', en: '/series/[genre]/[slug]', ru: '/serialy/[genre]/[slug]' },
+    '/cartoons/[genre]/[slug]': { tm: '/multifilmler/[genre]/[slug]', en: '/cartoons/[genre]/[slug]', ru: '/multfilmy/[genre]/[slug]' }
   }
 });

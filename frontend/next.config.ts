@@ -1,5 +1,9 @@
 import type { NextConfig } from 'next';
+import createNextIntlPlugin from 'next-intl/plugin';
 import { apiOrigin } from './src/api/config';
+
+// Points the plugin at the next-intl request config.
+const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
 const basePath = normalizeBasePath(process.env.APP_BASE_PATH ?? process.env.NEXT_PUBLIC_BASE_PATH ?? '');
 
@@ -21,4 +25,4 @@ function normalizeBasePath(value: string): string {
   return clean ? `/${clean}` : '';
 }
 
-export default config;
+export default withNextIntl(config);

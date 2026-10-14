@@ -1,4 +1,5 @@
 ARG NODE_IMAGE=node:22-alpine
+ARG NGINX_IMAGE=nginx:1.27-alpine
 ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:8.0
 ARG DOTNET_RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:8.0
 
@@ -31,6 +32,24 @@ COPY --from=frontend-build /app/frontend/public ./frontend/public
 
 EXPOSE 5173
 CMD ["npm", "run", "start", "--workspace", "frontend"]
+
+# The admin panel is a standalone Vite SPA. It builds with base /admin/ and is
+# served by the nginx edge together with the public site on a single origin.
+FROM ${NODE_IMAGE} AS admin-build
+ARG APP_BASE_PATH=/admin/
+ENV APP_BASE_PATH=${APP_BASE_PATH}
+WORKDIR /app
+
+COPY admin/package*.json ./admin/
+RUN npm install --prefix admin --no-audit --no-fund
+COPY admin ./admin
+RUN npm run build --prefix admin
+
+FROM ${NGINX_IMAGE} AS admin-runtime
+COPY admin/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=admin-build /app/admin/dist /usr/share/nginx/html/admin
+
+EXPOSE 80
 
 FROM ${DOTNET_SDK_IMAGE} AS backend-build
 WORKDIR /app

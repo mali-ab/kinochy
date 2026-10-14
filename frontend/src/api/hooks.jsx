@@ -3,7 +3,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { normalizeSubtitleCues } from '../player/subtitleCues.js';
-import { normalizeGenreCatalog } from '../ui/locale.jsx';
+import { normalizeGenreCatalog } from '../i18n/labels.js';
 import * as endpoints from './endpoints';
 import { commentsQuery, favoriteIdsQuery, favoriteQuery, favoritesListQuery, genresQuery, movieQuery, moviesQuery, queryKeys, recommendationsQuery, seasonsQuery, subtitlesQuery, translateQuery, viewerQuery, vocabularyQuery } from './queries';
 
@@ -150,53 +150,5 @@ export function useRemoveVocabularyWord() {
       if (context) queryClient.setQueryData(queryKeys.vocabulary, context.previous);
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.vocabulary })
-  });
-}
-
-// --- Admin mutations ---
-
-export function useDeleteUsers() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (ids) => endpoints.deleteUsers(ids),
-    onMutate: async (ids) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.adminUsers });
-      const previous = queryClient.getQueryData(queryKeys.adminUsers);
-      queryClient.setQueryData(queryKeys.adminUsers, (current) => (current ?? []).filter((user) => !ids.includes(user.id)));
-      return { previous };
-    },
-    onError: (_error, _ids, context) => {
-      if (context) queryClient.setQueryData(queryKeys.adminUsers, context.previous);
-    },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers })
-  });
-}
-
-export function useDeleteMovie() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id) => endpoints.deleteMovie(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['movies'] });
-      queryClient.invalidateQueries({ queryKey: ['movie'] });
-    }
-  });
-}
-
-export function useAddEpisode(seriesId, slug) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (payload) => endpoints.addEpisode(seriesId, payload),
-    onSuccess: (seasons) => {
-      queryClient.setQueryData(queryKeys.seasons(slug), seasons);
-    }
-  });
-}
-
-export function useRemoveEpisode(seriesId, slug) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (episodeId) => endpoints.removeEpisode(seriesId, episodeId),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.seasons(slug) })
   });
 }

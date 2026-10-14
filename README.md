@@ -5,10 +5,12 @@ Kinochy is a movie-based English learning platform with streaming playback, inte
 ## Stack
 
 - Frontend: Next.js App Router (React 19) served by a Node.js runtime
+- Admin: standalone Vite + React SPA (react-router), built static and served under `/admin`
 - Styling: Tailwind CSS
 - Backend: ASP.NET Core 8 Web API
 - Database: PostgreSQL
 - Video playback: HLS.js on the client, with direct video streaming from ASP.NET Core
+- Edge proxy: nginx single origin that serves the admin SPA and proxies the site and API
 
 ## Features
 
@@ -24,8 +26,9 @@ Kinochy is a movie-based English learning platform with streaming playback, inte
 ## Project Structure
 
 - `frontend/app/`: Next.js App Router routes, layouts, metadata, and global Tailwind styles
-- `frontend/src/`: typed API utilities, site views, movie player, and admin components
+- `frontend/src/`: typed API utilities, site views, movie player, and UI providers
 - `frontend/public/`: static assets such as icons and logos
+- `admin/`: standalone admin SPA (Vite + React + react-router) with its own API client, translations, and nginx config
 - `backend/Controllers/`: HTTP API and media endpoints grouped by responsibility
 - `backend/Services/`: authentication, movies, users, translation, and media logic
 - `backend/Data/`: PostgreSQL access and initialization
@@ -70,6 +73,15 @@ Start Next.js from the repository root in terminal 2:
 ```bash
 npm run dev:client
 ```
+
+To work on the admin panel, install its dependencies once and start its own dev server in another terminal:
+
+```bash
+npm install --prefix admin
+npm run dev:admin
+```
+
+The admin SPA runs on `http://localhost:5174/admin` and proxies `/api` and `/media` to `VITE_API_ORIGIN` (default `http://localhost:4000`). In the public site set `NEXT_PUBLIC_ADMIN_URL=http://localhost:5174/admin` (see `frontend/.env.example`) so the Admin nav link points at the dev server.
 
 Open `http://localhost:5173`. Check the API at `http://localhost:4000/api/health`. The Next.js server proxies `/api` and `/media` to `API_ORIGIN` (default `http://localhost:4000`) so browser requests stay same-origin; set `API_ORIGIN` before starting Next.js when the API runs at another address.
 
@@ -121,9 +133,10 @@ docker compose logs -f app
 
 6. Open:
 
-- `http://YOUR_DOMAIN_OR_IP:4000`
+- `http://YOUR_DOMAIN_OR_IP:4000` — public site
+- `http://YOUR_DOMAIN_OR_IP:4000/admin` — admin panel
 
-Compose runs two application containers: `frontend` (Next.js, public on port 4000) and `app` (ASP.NET Core API, reachable inside the Compose network as `http://app:4000`). The Next.js server proxies `/api` and `/media` requests to the API container, so the browser only talks to port 4000.
+Compose runs three application containers: `edge` (nginx, public on port 4000), `frontend` (Next.js site, internal on 5173) and `app` (ASP.NET Core API, internal on 4000). The edge serves the admin SPA under `/admin`, proxies `/api` and `/media` to the API container, and everything else to the Next.js site, so the browser only talks to port 4000.
 
 ## Persistent Data
 
@@ -164,6 +177,7 @@ Docker uses port `4000`, the root path `/`, an 8 GiB upload limit, PostgreSQL 16
 
 ```bash
 npm run build
+npm run build:admin
 dotnet build backend/Kinochy.Api.csproj
 dotnet run --project backend/Kinochy.Api.csproj
 dotnet tool restore
@@ -173,6 +187,7 @@ docker compose down
 docker compose up -d --build
 docker compose logs -f app
 docker compose logs -f frontend
+docker compose logs -f edge
 docker compose logs -f postgres
 ```
 

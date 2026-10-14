@@ -3,9 +3,9 @@
 import { Eye, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useEffect, useState } from 'react';
 import { forgotPassword, login, resendVerification, resetPassword, signup, verifyEmail, verifyPasswordReset } from '../api/endpoints';
-import { useLocale } from '../ui/locale.jsx';
 import { useSession } from '../ui/session.jsx';
 
 const initialForm = {
@@ -57,7 +57,7 @@ export default function AuthView({ mode = 'login', embedded = false }) {
   const [visiblePasswords, setVisiblePasswords] = useState({});
   const router = useRouter();
   const { setUser } = useSession();
-  const { t } = useLocale();
+  const t = useTranslations();
 
   useEffect(() => {
     if (panel !== 'verify') return undefined;

@@ -1,10 +1,11 @@
 import { Suspense } from 'react';
 import type { Metadata } from 'next';
 import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
+import { getTranslations } from 'next-intl/server';
 import { genresQuery, moviesQuery } from '@/src/api/queries';
 import { getQueryClient } from '@/src/providers/queryClient';
 import { CatalogPageSkeleton } from '@/src/ui/skeleton.jsx';
-import { t, translateGenre } from '@/src/ui/translations.js';
+import { translateGenre } from '@/src/i18n/labelHelpers.js';
 import CatalogView from '@/src/views/CatalogView';
 import { alternatesFor, catalogUrl, categoryLabelKey, homeUrl, safeLocale, type CategoryKey, type Locale } from './urls';
 
@@ -46,21 +47,23 @@ async function CatalogContent({ categoryKey = null, genreCode = null, search = '
   );
 }
 
-export function homeMetadata(locale: Locale): Metadata {
+export async function homeMetadata(locale: Locale): Promise<Metadata> {
   const safe = safeLocale(locale);
+  const t = await getTranslations({ locale: safe });
   return {
-    title: t(safe, 'seo_home_title'),
-    description: t(safe, 'seo_home_description'),
+    title: t('seo_home_title'),
+    description: t('seo_home_description'),
     alternates: { canonical: homeUrl(safe), languages: alternatesFor((candidate) => homeUrl(candidate)) }
   };
 }
 
-export function categoryMetadata(locale: Locale, categoryKey: CategoryKey): Metadata {
+export async function categoryMetadata(locale: Locale, categoryKey: CategoryKey): Promise<Metadata> {
   const safe = safeLocale(locale);
-  const label = t(safe, categoryLabelKey(categoryKey));
+  const t = await getTranslations({ locale: safe });
+  const label = t(categoryLabelKey(categoryKey));
   return {
     title: `${label} · Kinochy`,
-    description: `${label} — ${t(safe, 'seo_catalog_description')}`,
+    description: `${label} — ${t('seo_catalog_description')}`,
     alternates: {
       canonical: catalogUrl(safe, { category: categoryKey }),
       languages: alternatesFor((candidate) => catalogUrl(candidate, { category: categoryKey }))
@@ -68,13 +71,14 @@ export function categoryMetadata(locale: Locale, categoryKey: CategoryKey): Meta
   };
 }
 
-export function genreMetadata(locale: Locale, categoryKey: CategoryKey, genreCode: string, empty = false): Metadata {
+export async function genreMetadata(locale: Locale, categoryKey: CategoryKey, genreCode: string, empty = false): Promise<Metadata> {
   const safe = safeLocale(locale);
+  const t = await getTranslations({ locale: safe });
   const genreLabel = translateGenre(safe, genreCode);
-  const categoryLabel = t(safe, categoryLabelKey(categoryKey));
+  const categoryLabel = t(categoryLabelKey(categoryKey));
   return {
     title: `${genreLabel} · ${categoryLabel} · Kinochy`,
-    description: `${genreLabel} — ${categoryLabel}: ${t(safe, 'seo_catalog_description')}`,
+    description: `${genreLabel} — ${categoryLabel}: ${t('seo_catalog_description')}`,
     robots: empty ? { index: false } : undefined,
     alternates: {
       canonical: catalogUrl(safe, { category: categoryKey, genre: genreCode }),

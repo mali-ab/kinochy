@@ -1,5 +1,6 @@
 import { ArrowUpDown, Cast, Check, Crown, Expand, Gauge, Grid2x2, Pause, Play, Settings, Volume1, Volume2, VolumeX } from 'lucide-react';
 import Link from 'next/link';
+import { useTranslations } from 'next-intl';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { withLocale } from '../catalog/urls';
@@ -13,7 +14,8 @@ const fontMap = {
 };
 
 export default function MoviePlayer({ movie, subtitles, access }) {
-  const { locale, t } = useLocale();
+  const { locale } = useLocale();
+  const t = useTranslations();
   const stageRef = useRef(null);
   const videoRef = useRef(null);
   const listRef = useRef(null);
@@ -1019,7 +1021,7 @@ function SubtitleList({
   hoveredWord,
   compactMode
 }) {
-  const { t } = useLocale();
+  const t = useTranslations();
   const rowEstimate = gridOn ? 86 : russianOn ? 82 : 66;
   const shouldWindow = compactMode && cues.length > 140;
   const [windowCenter, setWindowCenter] = useState(scrollIndex);
@@ -1168,7 +1170,7 @@ function InteractiveText({ text, lang, pairText = '', onLookup, onHoverWord, hov
 }
 
 function WordCard({ lookup, onClose, voices, voicePrefs, setVoicePrefs, onSave }) {
-  const { t } = useLocale();
+  const t = useTranslations();
   const firstAccentRender = useRef(true);
   const accentOptions = lookup.lang === 'ru' ? ['ru'] : ['us', 'uk'];
   const accentValue = accentOptions.includes(voicePrefs.accent) ? voicePrefs.accent : accentOptions[0];
@@ -1230,7 +1232,7 @@ function WordCard({ lookup, onClose, voices, voicePrefs, setVoicePrefs, onSave }
 }
 
 function SubtitleSettings({ style, setStyle }) {
-  const { t } = useLocale();
+  const t = useTranslations();
   const [palette, setPalette] = useState(null);
   const colors = ['#ffffff', '#f4d979', '#ffd43b', '#f4ff00', '#0eea15', '#ff201b'];
 
@@ -1285,7 +1287,7 @@ function SubtitleSettings({ style, setStyle }) {
 }
 
 function PlayerToolsPanel({ toggles, setToggles, playbackRate, setPlaybackRate, qualityLevels, selectedQuality, setQuality }) {
-  const { t } = useLocale();
+  const t = useTranslations();
   function toggle(key) {
     setToggles((value) => ({ ...value, [key]: !value[key] }));
   }
