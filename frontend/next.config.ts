@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
-import { apiOrigin } from './src/api/config';
 
 const basePath = normalizeBasePath(process.env.APP_BASE_PATH ?? process.env.NEXT_PUBLIC_BASE_PATH ?? '');
+const apiOrigin = (process.env.API_ORIGIN ?? 'http://localhost:4000').replace(/\/+$/, '');
 
 const config: NextConfig = {
   basePath,

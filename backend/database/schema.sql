@@ -1,12 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS admins (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username TEXT NOT NULL DEFAULT '',
@@ -26,6 +19,23 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'tm';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'free';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ;
+
+DO $migration$
+BEGIN
+  IF to_regclass('public.admins') IS NOT NULL THEN
+    INSERT INTO users(username,email,password_hash,role,language,verified,subscription_plan,created_at)
+    SELECT 'Administrator',lower(email),password_hash,'admin','tm',true,'premium',created_at
+    FROM admins
+    ON CONFLICT(email) DO UPDATE SET
+      password_hash=excluded.password_hash,
+      role='admin',
+      verified=true,
+      subscription_plan='premium';
+
+    DROP TABLE admins;
+  END IF;
+END
+$migration$;
 
 CREATE TABLE IF NOT EXISTS movies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

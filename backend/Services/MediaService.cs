@@ -1,18 +1,25 @@
 namespace Kinochy.Api.Services;
 
-public sealed class MediaService(MovieService movies)
+public sealed class MediaService(MovieService movies, IWebHostEnvironment environment)
 {
     public async Task<(string Path,string Type,string? Duration)> VideoAsync(Guid id)
     {
-        var movie=await movies.FindAsync(id.ToString(),true);if(movie is null||!File.Exists(movie.VideoPath)||Path.GetExtension(movie.VideoPath).Equals(".m3u8",StringComparison.OrdinalIgnoreCase))throw new FileNotFoundException();
-        var type=Path.GetExtension(movie.VideoPath).ToLowerInvariant() switch{".webm"=>"video/webm",".mkv"=>"video/x-matroska",_=>"video/mp4"};return(movie.VideoPath,type,movie.Duration);
+        var movie=await movies.FindAsync(id.ToString(),true);if(movie is null||Path.GetExtension(movie.VideoPath).Equals(".m3u8",StringComparison.OrdinalIgnoreCase))throw new FileNotFoundException();
+        var path=ResolveStoredPath(movie.VideoPath);
+        if(!File.Exists(path))throw new FileNotFoundException("Movie video file was not found.",path);
+        var type=Path.GetExtension(path).ToLowerInvariant() switch{".webm"=>"video/webm",".mkv"=>"video/x-matroska",_=>"video/mp4"};return(path,type,movie.Duration);
     }
     public async Task<string> HlsAsync(Guid id,string? segment=null)
     {
         var movie=await movies.FindAsync(id.ToString(),true);if(movie is null)throw new FileNotFoundException();
-        var isUploadedHls=Path.GetExtension(movie.VideoPath).Equals(".m3u8",StringComparison.OrdinalIgnoreCase);
-        var directory=isUploadedHls?Path.GetDirectoryName(movie.VideoPath)!:Path.Combine(Path.GetDirectoryName(movie.VideoPath)!,Path.GetFileNameWithoutExtension(movie.VideoPath)+"-hls");
-        if(segment is null)return movie.VideoPath;
+        var videoPath=ResolveStoredPath(movie.VideoPath);
+        var isUploadedHls=Path.GetExtension(videoPath).Equals(".m3u8",StringComparison.OrdinalIgnoreCase);
+        var directory=isUploadedHls?Path.GetDirectoryName(videoPath)!:Path.Combine(Path.GetDirectoryName(videoPath)!,Path.GetFileNameWithoutExtension(videoPath)+"-hls");
+        if(segment is null)
+        {
+            if(!isUploadedHls||!File.Exists(videoPath))throw new FileNotFoundException("Movie HLS playlist was not found.",videoPath);
+            return videoPath;
+        }
         if(string.IsNullOrWhiteSpace(segment)||Path.IsPathRooted(segment)||segment.Contains('\\')||segment.IndexOfAny([':', '?', '#', '%'])>=0||segment.Split('/').Any(part=>part is "" or "." or ".."))throw new FileNotFoundException();
         var root=Path.GetFullPath(directory)+Path.DirectorySeparatorChar;
         var path=Path.GetFullPath(Path.Combine(directory,segment.Replace('/',Path.DirectorySeparatorChar)));
@@ -38,5 +45,24 @@ public sealed class MediaService(MovieService movies)
             }
         }
         return false;
+    }
+
+    private string ResolveStoredPath(string storedPath)
+    {
+        if(File.Exists(storedPath))return storedPath;
+
+        var normalized=storedPath.Replace('\\','/');
+        foreach(var storageArea in new[]{"preloaded","uploads"})
+        {
+            var marker=$"/storage/{storageArea}/";
+            var markerIndex=normalized.IndexOf(marker,StringComparison.OrdinalIgnoreCase);
+            if(markerIndex<0)continue;
+            var relative=normalized[(markerIndex+marker.Length)..];
+            if(relative.Split('/').Any(part=>part is "" or "." or ".."))continue;
+            var candidate=Path.GetFullPath(Path.Combine(environment.ContentRootPath,"storage",storageArea,relative.Replace('/',Path.DirectorySeparatorChar)));
+            var root=Path.GetFullPath(Path.Combine(environment.ContentRootPath,"storage",storageArea))+Path.DirectorySeparatorChar;
+            if(candidate.StartsWith(root,StringComparison.Ordinal)&&File.Exists(candidate))return candidate;
+        }
+        return storedPath;
     }
 }

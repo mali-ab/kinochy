@@ -9,9 +9,8 @@ public sealed class AuthService(Database database, TokenService tokens)
     public async Task<SessionUser> LoginAsync(string email, string password, bool adminOnly = false)
     {
         await using var connection = await database.OpenAsync();
-        var sql = adminOnly
-            ? "SELECT id, '' username, email, 'admin' role, 'tm' language, password_hash, 'premium' subscription_plan, NULL::timestamptz subscription_expires_at FROM admins WHERE lower(email)=lower(@email)"
-            : "SELECT id, username, email, role, language, password_hash, subscription_plan, subscription_expires_at FROM users WHERE lower(email)=lower(@email) AND verified=true";
+        var sql = "SELECT id, username, email, role, language, password_hash, subscription_plan, subscription_expires_at FROM users WHERE lower(email)=lower(@email) AND verified=true" +
+            (adminOnly ? " AND role='admin'" : "");
         await using var command = connection.Command(sql, ("email", email.Trim()));
         await using var reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync() || !BCrypt.Net.BCrypt.Verify(password, reader.GetString(5)))
