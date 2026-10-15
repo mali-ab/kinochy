@@ -60,6 +60,8 @@ CREATE TABLE IF NOT EXISTS movies (
 );
 
 ALTER TABLE movies ADD COLUMN IF NOT EXISTS genres JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE movies DROP CONSTRAINT IF EXISTS movies_year_integer_range;
+ALTER TABLE movies ADD CONSTRAINT movies_year_integer_range CHECK (year BETWEEN 1888 AND 9999);
 
 CREATE TABLE IF NOT EXISTS genres (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -119,6 +121,14 @@ FROM (
 WHERE movie.id=normalized.id AND movie.genres IS DISTINCT FROM normalized.value;
 UPDATE movies SET genre='Cartoon' WHERE lower(genre) IN ('animation','анимация','animasiýa','cartoon','мультфильм','multfilm');
 DELETE FROM genres WHERE name='Animation';
+
+CREATE TABLE IF NOT EXISTS countries (
+  code TEXT PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL
+);
+
+
+UPDATE movies SET country='United States' WHERE country='USA';
 
 CREATE TABLE IF NOT EXISTS subtitles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

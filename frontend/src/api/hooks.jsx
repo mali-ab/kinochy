@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { normalizeSubtitleCues } from '../player/subtitleCues.js';
 import { normalizeGenreCatalog } from '../ui/locale.jsx';
 import * as endpoints from './endpoints';
-import { commentsQuery, favoriteIdsQuery, favoriteQuery, favoritesListQuery, genresQuery, movieQuery, moviesQuery, queryKeys, recommendationsQuery, seasonsQuery, subtitlesQuery, translateQuery, viewerQuery, vocabularyQuery } from './queries';
+import { commentsQuery, countriesQuery, favoriteIdsQuery, favoriteQuery, favoritesListQuery, genresQuery, movieQuery, moviesQuery, queryKeys, recommendationsQuery, seasonsQuery, subtitlesQuery, translateQuery, viewerQuery, vocabularyQuery } from './queries';
 
 // --- Catalog reads ---
 
@@ -17,6 +17,11 @@ export function useMovies(search = '') {
 export function useGenres() {
   const query = useQuery(genresQuery());
   return useMemo(() => normalizeGenreCatalog(query.data ?? []), [query.data]);
+}
+
+export function useCountries() {
+  const query = useQuery(countriesQuery());
+  return query.data ?? [];
 }
 
 export function useMovie(slug) {

@@ -3,13 +3,13 @@
 import { ArrowLeft, Film, LogOut, Users } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import logo from '../../public/kinochy_favicon.png';
 import { adminLogout } from '../api/endpoints';
 import { adminSessionQuery, queryKeys } from '../api/queries';
 import { LocaleProvider, useLocale } from '../ui/locale.jsx';
-import AdminLogin from './AdminLogin.jsx';
 import { ConfirmProvider, useConfirm } from './confirm.jsx';
 
 export default function AdminShell({ children }) {
@@ -26,17 +26,27 @@ function AdminGate({ children }) {
   const queryClient = useQueryClient();
   const { data: admin = null, isPending: checking } = useQuery({ ...adminSessionQuery(), retry: false });
   const { t } = useLocale();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!checking && !admin) router.replace('/login');
+  }, [admin, checking, router]);
 
   function setAdmin(next) {
     queryClient.setQueryData(queryKeys.adminSession, next);
   }
 
+  function clearSession() {
+    setAdmin(null);
+    queryClient.setQueryData(queryKeys.viewer, null);
+  }
+
   if (checking) return <div className="status">{t('admin_checking')}</div>;
-  if (!admin) return <AdminLogin onLogin={setAdmin} />;
+  if (!admin) return <div className="status">{t('admin_checking')}</div>;
 
   return (
     <ConfirmProvider>
-      <AdminChrome admin={admin} onLogout={() => setAdmin(null)}>
+      <AdminChrome admin={admin} onLogout={clearSession}>
         {children}
       </AdminChrome>
     </ConfirmProvider>

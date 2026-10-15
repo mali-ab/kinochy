@@ -11,7 +11,7 @@ public sealed class AdminController(Database database,MovieService movies,MovieC
 {
     private void RequireAdmin()
     {
-        var principal=tokens.Read(Request.Cookies["kinochy_admin"]??Request.Cookies["filmglish_admin"]);
+        var principal=tokens.Read(Request.Cookies["kinochy_user"]??Request.Cookies["filmglish_user"]);
         if(principal?.IsInRole("admin")!=true)throw new ApiException("Admin login required",401);
     }
 

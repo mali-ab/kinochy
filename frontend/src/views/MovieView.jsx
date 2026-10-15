@@ -9,6 +9,7 @@ import { useAddComment, useComments, useFavoriteStatus, useMovie, useRecommendat
 import { movieUrl, withLocale } from '../catalog/urls';
 import MoviePlayer from '../player/MoviePlayer.jsx';
 import { translateAccent, translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
+import DifficultyIndicator from '../ui/DifficultyIndicator.jsx';
 import { useSession } from '../ui/session.jsx';
 import { MovieDetailSkeleton } from '../ui/skeleton.jsx';
 
@@ -121,7 +122,7 @@ export default function MovieView({ slug }) {
               <Star size={16} fill="currentColor" /> {Number(movie.rating || 8).toFixed(1)} / 10
             </dd>
             <dt>{t('difficulty')}</dt>
-            <dd><span className={`difficulty-level ${movie.difficulty || 'medium'}`}>{translateDifficulty(locale, movie.difficulty || 'medium')}</span></dd>
+            <dd><DifficultyIndicator className="difficulty-level" level={movie.difficulty} label={translateDifficulty(locale, movie.difficulty || 'medium')} showLabel /></dd>
             <dt>{t('accent')}</dt>
             <dd>{movie.accent ? translateAccent(locale, movie.accent) : '—'}</dd>
             <dt>{t('subtitles')}</dt>

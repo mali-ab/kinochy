@@ -54,6 +54,14 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         while (await reader.ReadAsync()) result.Add(new(reader.GetString(0),reader.GetString(1),reader.GetString(2),reader.GetString(3))); return result;
     }
 
+    public async Task<List<CountryView>> CountriesAsync()
+    {
+        await using var connection=await database.OpenAsync();
+        await using var command=connection.Command("SELECT code,name FROM countries ORDER BY name");
+        await using var reader=await command.ExecuteReaderAsync();var result=new List<CountryView>();
+        while(await reader.ReadAsync())result.Add(new(reader.GetString(0),reader.GetString(1)));return result;
+    }
+
     public async Task<List<SubtitleCue>> SubtitlesAsync(Guid movieId, string language)
     {
         await using var connection = await database.OpenAsync();
@@ -99,11 +107,12 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         var genres=JsonSerializer.Serialize(genreValues.Length>0?genreValues:["Drama"]);
         var movieType=NormalizeMovieType(form["type"].ToString());
         var difficulty=NormalizeDifficulty(form["difficulty"].ToString());
+        var year=ParseYear(form["year"].ToString());
         var countryRaw=form["country"].ToString();var country=countryRaw.StartsWith('[')?string.Join(", ",JsonSerializer.Deserialize<string[]>(countryRaw)??[]):countryRaw;
         await using var connection=await database.OpenAsync();await using var tx=await connection.BeginTransactionAsync();
         Guid movieId;
-        if(id is null){if(video is null)throw new ApiException("Video is required");const string sql="""INSERT INTO movies(slug,title,original_title,description,year,country,genre,genres,type,duration,rating,difficulty,accent,age_rating,cover_url,video_path) VALUES(@slug,@title,@original,@description,@year,@country,@genre,@genres::jsonb,@type,@duration,@rating,@difficulty,@accent,@age,@cover,@video) RETURNING id""";await using var q=connection.Command(sql,("slug",slug),("title",title),("original",form["originalTitle"].ToString()),("description",form["description"].ToString()),("year",int.TryParse(form["year"].ToString(),out var year)?year:null),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",movieType),("duration",form["duration"].ToString()),("rating",decimal.TryParse(form["rating"].ToString(),out var rating)?rating:8m),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",cover is null?null:"/media/uploads/"+Path.GetFileName(cover)),("video",video));movieId=(Guid)(await q.ExecuteScalarAsync())!;}
-        else{movieId=id.Value;const string sql="""UPDATE movies SET title=@title,original_title=@original,description=@description,year=@year,country=@country,genre=@genre,genres=@genres::jsonb,type=@type,duration=@duration,rating=@rating,difficulty=@difficulty,accent=@accent,age_rating=@age,cover_url=coalesce(@cover,cover_url),video_path=coalesce(@video,video_path),updated_at=now() WHERE id=@id""";await using var q=connection.Command(sql,("id",movieId),("title",title),("original",form["originalTitle"].ToString()),("description",form["description"].ToString()),("year",int.TryParse(form["year"].ToString(),out var year)?year:null),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",movieType),("duration",form["duration"].ToString()),("rating",decimal.TryParse(form["rating"].ToString(),out var rating)?rating:8m),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",cover is null?null:"/media/uploads/"+Path.GetFileName(cover)),("video",video));if(await q.ExecuteNonQueryAsync()==0)throw new ApiException("Movie not found",404);}
+        if(id is null){if(video is null)throw new ApiException("Video is required");const string sql="""INSERT INTO movies(slug,title,original_title,description,year,country,genre,genres,type,duration,rating,difficulty,accent,age_rating,cover_url,video_path) VALUES(@slug,@title,@original,@description,@year,@country,@genre,@genres::jsonb,@type,@duration,@rating,@difficulty,@accent,@age,@cover,@video) RETURNING id""";await using var q=connection.Command(sql,("slug",slug),("title",title),("original",form["originalTitle"].ToString()),("description",form["description"].ToString()),("year",year),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",movieType),("duration",form["duration"].ToString()),("rating",decimal.TryParse(form["rating"].ToString(),out var rating)?rating:8m),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",cover is null?null:"/media/uploads/"+Path.GetFileName(cover)),("video",video));movieId=(Guid)(await q.ExecuteScalarAsync())!;}
+        else{movieId=id.Value;const string sql="""UPDATE movies SET title=@title,original_title=@original,description=@description,year=@year,country=@country,genre=@genre,genres=@genres::jsonb,type=@type,duration=@duration,rating=@rating,difficulty=@difficulty,accent=@accent,age_rating=@age,cover_url=coalesce(@cover,cover_url),video_path=coalesce(@video,video_path),updated_at=now() WHERE id=@id""";await using var q=connection.Command(sql,("id",movieId),("title",title),("original",form["originalTitle"].ToString()),("description",form["description"].ToString()),("year",year),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",movieType),("duration",form["duration"].ToString()),("rating",decimal.TryParse(form["rating"].ToString(),out var rating)?rating:8m),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",cover is null?null:"/media/uploads/"+Path.GetFileName(cover)),("video",video));if(await q.ExecuteNonQueryAsync()==0)throw new ApiException("Movie not found",404);}
         foreach(var item in subtitleSources){var cues=SubtitleParser.Parse(item.Value);if(cues.Count==0)throw new ApiException($"{item.Key.ToUpperInvariant()} subtitle file has no valid cues.");await using var q=connection.Command("INSERT INTO subtitles(movie_id,language,cues) VALUES(@id,@language,@cues::jsonb) ON CONFLICT(movie_id,language) DO UPDATE SET cues=excluded.cues",("id",movieId),("language",item.Key),("cues",JsonSerializer.Serialize(cues,SubtitleJson)));await q.ExecuteNonQueryAsync();}
         await tx.CommitAsync();return (await FindAsync(movieId.ToString(),true))!;
     }
@@ -138,6 +147,14 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
     {
         "easy" => "easy", "hard" => "hard", _ => "medium"
     };
+
+    private static int ParseYear(string value)
+    {
+        var maximum=DateTime.UtcNow.Year+5;
+        if(!int.TryParse(value,System.Globalization.NumberStyles.None,System.Globalization.CultureInfo.InvariantCulture,out var year)||year<1888||year>maximum)
+            throw new ApiException($"Year must be a whole number between 1888 and {maximum}.");
+        return year;
+    }
 
     private static async Task<List<MovieRow>> ReadMany(Npgsql.NpgsqlCommand command)
     {

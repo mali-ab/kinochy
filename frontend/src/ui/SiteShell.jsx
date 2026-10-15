@@ -31,7 +31,7 @@ function SiteChrome({ children }) {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
   const languageRef = useRef(null);
-  const { user, admin, setUser } = useSession();
+  const { user, admin, setUser, setAdmin } = useSession();
   const { locale, setLocale, t, languageOptions, saving: languageSaving } = useLocale();
   const router = useRouter();
   const pathname = usePathname();
@@ -72,6 +72,7 @@ function SiteChrome({ children }) {
   async function logout() {
     await logoutUser();
     setUser(null);
+    setAdmin(null);
     queryClient.invalidateQueries({ queryKey: ['users'] });
     setConfirmLogout(false);
     router.push(homeUrl(locale));

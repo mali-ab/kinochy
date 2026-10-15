@@ -1,6 +1,6 @@
 import { api } from './client';
 import { publicGet, type CacheOptions } from './http';
-import type { AdminIdentity, AdminUser, Genre, Movie, MovieComment, SeriesSeason, SessionUser, TranslateResult, VocabularyEntry } from './types';
+import type { AdminUser, Country, Genre, Movie, MovieComment, SeriesSeason, SessionUser, TranslateResult, VocabularyEntry } from './types';
 
 // --- Public catalog (isomorphic: cached on the server, proxied in the browser) ---
 
@@ -10,6 +10,10 @@ export function getMovies(search = '', options?: CacheOptions) {
 
 export function getGenres(options?: CacheOptions) {
   return publicGet<Genre[]>('/api/genres', options);
+}
+
+export function getCountries(options?: CacheOptions) {
+  return publicGet<Country[]>('/api/countries', options);
 }
 
 export function getMovie(slug: string, options?: CacheOptions) {
@@ -43,7 +47,7 @@ export function getCurrentUser() {
 }
 
 export function getCurrentAdmin() {
-  return api<{ admin: AdminIdentity | null }>('/api/auth/me').then((data) => data.admin ?? null);
+  return getCurrentUser().then((user) => user?.role === 'admin' ? { id: user.id, email: user.email } : null);
 }
 
 export function login(payload: { email: string; password: string }) {
@@ -124,12 +128,8 @@ export function removeComment(slug: string, id: string) {
 
 // --- Admin (browser-only) ---
 
-export function adminLogin(payload: { email: string; password: string }) {
-  return api<{ admin: AdminIdentity }>('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
-}
-
 export function adminLogout() {
-  return api<{ ok: boolean }>('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+  return logout();
 }
 
 export function getAdminMovie(id: string) {

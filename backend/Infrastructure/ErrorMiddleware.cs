@@ -1,6 +1,6 @@
 namespace Kinochy.Api.Infrastructure;
 
-public sealed class ErrorMiddleware(RequestDelegate next, ILogger<ErrorMiddleware> logger)
+public sealed class ErrorMiddleware(RequestDelegate next, ILogger<ErrorMiddleware> logger, IWebHostEnvironment environment)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -14,7 +14,10 @@ public sealed class ErrorMiddleware(RequestDelegate next, ILogger<ErrorMiddlewar
         {
             logger.LogError(error, "Unhandled request failure");
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-            await context.Response.WriteAsJsonAsync(new { message = "Internal server error" });
+            await context.Response.WriteAsJsonAsync(new {
+                message = environment.IsDevelopment() ? error.Message : "Internal server error",
+                code = "SERVER_ERROR"
+            });
         }
     }
 }

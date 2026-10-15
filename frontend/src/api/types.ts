@@ -36,6 +36,11 @@ export interface Genre {
   ru: string;
 }
 
+export interface Country {
+  code: string;
+  name: string;
+}
+
 export interface MovieComment {
   id: string;
   userId: string;
@@ -66,11 +71,6 @@ export interface SessionUser {
   role: string;
   language: string;
   subscription: Subscription;
-}
-
-export interface AdminIdentity {
-  id: string;
-  email: string;
 }
 
 export interface AdminUser {

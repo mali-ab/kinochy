@@ -10,6 +10,7 @@ import { useFavoriteIds, useGenres, useMovies } from '../api/hooks.jsx';
 import { catalogUrl, categoryLabelKey, movieUrl, normalizeType } from '../catalog/urls';
 import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
 import { CatalogFeatureSkeleton, MovieCardSkeleton } from '../ui/skeleton.jsx';
+import DifficultyIndicator from '../ui/DifficultyIndicator.jsx';
 
 /**
  * Shared catalog listing for the home library, the category routes and their
@@ -157,7 +158,7 @@ export default function CatalogView({ categoryKey = null, genreCode = null }) {
                   sizes="(max-width: 620px) 45vw, (max-width: 980px) 30vw, 174px"
                 />
               ) : null}
-              <span className={`difficulty-poster ${movie.difficulty || 'medium'}`}>{translateDifficulty(locale, movie.difficulty || 'medium')}</span>
+              <DifficultyIndicator className="difficulty-poster" level={movie.difficulty} label={translateDifficulty(locale, movie.difficulty || 'medium')} />
               <span className="age">{movie.ageRating || '16+'}</span>
               {favoriteIds.includes(movie.id) ? (
                 <span className="favorite-badge" title={t('nav_favorites')}>
@@ -182,7 +183,7 @@ export default function CatalogView({ categoryKey = null, genreCode = null }) {
             </div>
             <div className="movie-card-copy">
               <strong className="movie-title">{movie.title}</strong>
-              <span className="movie-card-details">{movie.year || '—'} <span>·</span> {movie.genres?.[0] ? translateGenre(locale, movie.genres[0], genres) : movie.genre || t('movie_type_movie')} <span>·</span> <span className={`difficulty-inline ${movie.difficulty || 'medium'}`}>{translateDifficulty(locale, movie.difficulty || 'medium')}</span></span>
+              <span className="movie-card-details">{movie.year || '—'} <span>·</span> {movie.genres?.[0] ? translateGenre(locale, movie.genres[0], genres) : movie.genre || t('movie_type_movie')} <span>·</span> <DifficultyIndicator className="difficulty-inline" level={movie.difficulty} label={translateDifficulty(locale, movie.difficulty || 'medium')} /></span>
               <ArrowUpRight className="movie-card-arrow" size={17} aria-hidden="true" />
             </div>
           </Link>

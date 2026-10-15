@@ -65,10 +65,10 @@ dotnet restore backend/Kinochy.Api.csproj
 dotnet run --project backend/Kinochy.Api.csproj
 ```
 
-The Development profile listens on `http://localhost:4000`, connects to the local `kinochy` database, applies `backend/database/schema.sql`, and seeds the default admin and user accounts. Verify it with:
+The Development profile listens on `http://0.0.0.0:5000`, connects to the local `kinochy` database, applies `backend/database/schema.sql`, and seeds the default admin and user accounts. Verify it with:
 
 ```bash
-curl http://localhost:4000/api/health
+curl http://localhost:5000/api/health
 ```
 
 Local defaults live in `backend/appsettings.Development.json` and are used only when `ASPNETCORE_ENVIRONMENT=Development`. To use different credentials without editing that file, override them for one run:
@@ -90,7 +90,7 @@ npm install
 npm run dev:client
 ```
 
-Open `http://localhost:5173`. Next.js proxies `/api` and `/media` to `API_ORIGIN`, which defaults to `http://localhost:4000`.
+Open `http://localhost:4000`. Next.js listens on all interfaces and proxies `/api` and `/media` to `API_ORIGIN`, which defaults to `http://localhost:5000`.
 
 The root `.env` is read by Docker Compose and is not needed for a local backend run.
 
@@ -171,7 +171,7 @@ Docker uses port `4000`, the root path `/`, an 8 GiB upload limit, PostgreSQL 16
 - For an adaptive HLS movie, choose **HLS bundle** and upload a ZIP containing `master.m3u8` plus its rendition folders. ZIP paths and playlist references are validated before extraction. A flat `.m3u8` playlist with separately selected media files is also supported.
 - Subtitle uploads accept separate SRT/VTT files or one ZIP bundle. Include `en`/`english` and `ru`/`russian` in filenames, for example `movie.en.srt` and `movie.ru.srt`; archive paths, file count, and extracted size are validated.
 - To convert an existing video into this format, see the [local movie tools](scripts/local_movies/README.md).
-- `API_ORIGIN`: address the Next.js server proxies `/api` and `/media` requests to; defaults to `http://localhost:4000` outside Docker and is set to `http://app:4000` by Compose
+- `API_ORIGIN`: address the Next.js server proxies `/api` and `/media` requests to; defaults to `http://localhost:5000` outside Docker and is set to `http://app:4000` by Compose
 
 ## Production Notes
 

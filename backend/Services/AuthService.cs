@@ -6,11 +6,10 @@ namespace Kinochy.Api.Services;
 
 public sealed class AuthService(Database database, TokenService tokens)
 {
-    public async Task<SessionUser> LoginAsync(string email, string password, bool adminOnly = false)
+    public async Task<SessionUser> LoginAsync(string email, string password)
     {
         await using var connection = await database.OpenAsync();
-        var sql = "SELECT id, username, email, role, language, password_hash, subscription_plan, subscription_expires_at FROM users WHERE lower(email)=lower(@email) AND verified=true" +
-            (adminOnly ? " AND role='admin'" : "");
+        const string sql = "SELECT id, username, email, role, language, password_hash, subscription_plan, subscription_expires_at FROM users WHERE lower(email)=lower(@email) AND verified=true";
         await using var command = connection.Command(sql, ("email", email.Trim()));
         await using var reader = await command.ExecuteReaderAsync();
         if (!await reader.ReadAsync() || !BCrypt.Net.BCrypt.Verify(password, reader.GetString(5)))
@@ -74,7 +73,7 @@ public sealed class AuthService(Database database, TokenService tokens)
         await VerifyCodeAsync(new(request.Email,request.Code));if(request.Password.Length<8)throw new ApiException("Password must be at least 8 characters");await using var connection=await database.OpenAsync();await using var command=connection.Command("UPDATE users SET password_hash=@hash,verification_code=null,verification_expires_at=null WHERE lower(email)=lower(@email)",( "hash",BCrypt.Net.BCrypt.HashPassword(request.Password)),("email",request.Email));await command.ExecuteNonQueryAsync();
     }
 
-    public string Token(SessionUser user) => tokens.Create(user.Id, user.Email, user.Role, TimeSpan.FromDays(30));
-    public string AdminToken(SessionUser user) => tokens.Create(user.Id, user.Email, "admin", TimeSpan.FromHours(8));
+    public string Token(SessionUser user) => tokens.Create(user.Id, user.Email, user.Role,
+        user.Role.Equals("admin",StringComparison.OrdinalIgnoreCase)?TimeSpan.FromHours(8):TimeSpan.FromDays(30));
     private static SessionUser ReadUser(Npgsql.NpgsqlDataReader reader) => new(reader.GetGuid(0),reader.GetString(1),reader.GetString(2),reader.GetString(3),reader.GetString(4),reader.GetString(5),reader.IsDBNull(6)?null:reader.GetDateTime(6));
 }

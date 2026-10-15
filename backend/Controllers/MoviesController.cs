@@ -9,6 +9,7 @@ public sealed class MoviesController(MovieService movies,MovieCommunityService c
 {
     [HttpGet("api/movies")] public Task<List<Models.MovieRow>> List([FromQuery]string? search)=>movies.ListAsync(search);
     [HttpGet("api/genres")] public Task<List<GenreView>> Genres()=>movies.GenresAsync();
+    [HttpGet("api/countries")] public Task<List<CountryView>> Countries()=>movies.CountriesAsync();
     [HttpGet("api/movies/{slug}")] public async Task<IActionResult> Get(string slug){var movie=await movies.FindAsync(slug);return movie is null?NotFound(new{message="Movie not found"}):Ok(movie);}
     [HttpGet("api/movies/{slug}/subtitles/{language}")]
     public async Task<IActionResult> Subtitles(string slug,string language)
