@@ -1,4 +1,5 @@
 import { withBasePath } from '../paths';
+import { browserApiOrigin } from './config';
 
 export type ApiOptions = RequestInit;
 
@@ -38,7 +39,8 @@ type UploadOptions = {
 export function apiUpload<T = any>(path: string, { method = 'POST', body, headers = {}, onProgress }: UploadOptions): Promise<T> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
-    request.open(method, withBasePath(path), true);
+    const directOrigin = browserApiOrigin();
+    request.open(method, directOrigin ? `${directOrigin}${path}` : withBasePath(path), true);
     request.withCredentials = true;
 
     Object.entries(headers).forEach(([key, value]) => request.setRequestHeader(key, value));

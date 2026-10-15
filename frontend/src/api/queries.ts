@@ -4,6 +4,7 @@ import * as endpoints from './endpoints';
 export const queryKeys = {
   movies: (search = '') => ['movies', search] as const,
   genres: ['genres'] as const,
+  countries: ['countries'] as const,
   movie: (slug: string) => ['movie', slug] as const,
   recommendations: (slug: string) => ['movies', slug, 'recommendations'] as const,
   seasons: (slug: string) => ['movies', slug, 'seasons'] as const,
@@ -20,19 +21,23 @@ export const queryKeys = {
 };
 
 export function moviesQuery(search = '') {
-  return queryOptions({ queryKey: queryKeys.movies(search), queryFn: () => endpoints.getMovies(search), staleTime: 60_000 });
+  return queryOptions({ queryKey: queryKeys.movies(search), queryFn: () => endpoints.getMovies(search), staleTime: 5 * 60_000 });
 }
 
 export function genresQuery() {
   return queryOptions({ queryKey: queryKeys.genres, queryFn: () => endpoints.getGenres(), staleTime: 10 * 60_000 });
 }
 
+export function countriesQuery() {
+  return queryOptions({ queryKey: queryKeys.countries, queryFn: () => endpoints.getCountries(), staleTime: 24 * 60 * 60_000 });
+}
+
 export function movieQuery(slug: string) {
-  return queryOptions({ queryKey: queryKeys.movie(slug), queryFn: () => endpoints.getMovie(slug), staleTime: 60_000 });
+  return queryOptions({ queryKey: queryKeys.movie(slug), queryFn: () => endpoints.getMovie(slug), staleTime: 5 * 60_000 });
 }
 
 export function recommendationsQuery(slug: string) {
-  return queryOptions({ queryKey: queryKeys.recommendations(slug), queryFn: () => endpoints.getRecommendations(slug), staleTime: 60_000 });
+  return queryOptions({ queryKey: queryKeys.recommendations(slug), queryFn: () => endpoints.getRecommendations(slug), staleTime: 5 * 60_000 });
 }
 
 export function seasonsQuery(slug: string) {

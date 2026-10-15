@@ -1,12 +1,5 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-CREATE TABLE IF NOT EXISTS admins (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username TEXT NOT NULL DEFAULT '',
@@ -26,6 +19,23 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'tm';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'free';
 ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_expires_at TIMESTAMPTZ;
+
+DO $migration$
+BEGIN
+  IF to_regclass('public.admins') IS NOT NULL THEN
+    INSERT INTO users(username,email,password_hash,role,language,verified,subscription_plan,created_at)
+    SELECT 'Administrator',lower(email),password_hash,'admin','tm',true,'premium',created_at
+    FROM admins
+    ON CONFLICT(email) DO UPDATE SET
+      password_hash=excluded.password_hash,
+      role='admin',
+      verified=true,
+      subscription_plan='premium';
+
+    DROP TABLE admins;
+  END IF;
+END
+$migration$;
 
 CREATE TABLE IF NOT EXISTS movies (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -50,6 +60,8 @@ CREATE TABLE IF NOT EXISTS movies (
 );
 
 ALTER TABLE movies ADD COLUMN IF NOT EXISTS genres JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE movies DROP CONSTRAINT IF EXISTS movies_year_integer_range;
+ALTER TABLE movies ADD CONSTRAINT movies_year_integer_range CHECK (year BETWEEN 1888 AND 9999);
 
 CREATE TABLE IF NOT EXISTS genres (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -109,6 +121,14 @@ FROM (
 WHERE movie.id=normalized.id AND movie.genres IS DISTINCT FROM normalized.value;
 UPDATE movies SET genre='Cartoon' WHERE lower(genre) IN ('animation','анимация','animasiýa','cartoon','мультфильм','multfilm');
 DELETE FROM genres WHERE name='Animation';
+
+CREATE TABLE IF NOT EXISTS countries (
+  code TEXT PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL
+);
+
+
+UPDATE movies SET country='United States' WHERE country='USA';
 
 CREATE TABLE IF NOT EXISTS subtitles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

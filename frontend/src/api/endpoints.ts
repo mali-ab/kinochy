@@ -12,6 +12,10 @@ export function getGenres(options?: CacheOptions) {
   return publicGet<Genre[]>('/api/genres', options);
 }
 
+export function getCountries(options?: CacheOptions) {
+  return publicGet<Country[]>('/api/countries', options);
+}
+
 export function getMovie(slug: string, options?: CacheOptions) {
   return publicGet<Movie>(`/api/movies/${encodeURIComponent(slug)}`, options);
 }
@@ -43,7 +47,7 @@ export function getCurrentUser() {
 }
 
 export function getCurrentAdmin() {
-  return api<{ admin: AdminIdentity | null }>('/api/auth/me').then((data) => data.admin ?? null);
+  return getCurrentUser().then((user) => user?.role === 'admin' ? { id: user.id, email: user.email } : null);
 }
 
 export function login(payload: { email: string; password: string }) {

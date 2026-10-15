@@ -14,7 +14,7 @@ async function responseError(response: Response): Promise<ApiError> {
  */
 export async function publicGet<T>(path: string, options: CacheOptions = {}): Promise<T> {
   if (typeof window !== 'undefined') return api<T>(path);
-  const response = await fetch(`${apiOrigin}${path}`, { next: { revalidate: options.revalidate ?? 60, tags: options.tags } });
+  const response = await fetch(`${apiOrigin}${path}`, { next: { revalidate: options.revalidate ?? 300, tags: options.tags } });
   if (!response.ok) throw await responseError(response);
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;

@@ -12,6 +12,7 @@ import { catalogUrl, categoryLabelKey, movieUrl, normalizeType } from '../catalo
 import { useEnumLabels } from '../i18n/useEnumLabels.jsx';
 import { useLocale } from '../ui/locale.jsx';
 import { CatalogFeatureSkeleton, MovieCardSkeleton } from '../ui/skeleton.jsx';
+import DifficultyIndicator from '../ui/DifficultyIndicator.jsx';
 
 /**
  * Shared catalog listing for the home library, the category routes and their

@@ -12,6 +12,10 @@ const config: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   trailingSlash: false,
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 604800
+  },
   async rewrites() {
     return [
       { source: '/api/:path*', destination: `${apiOrigin}/api/:path*` },

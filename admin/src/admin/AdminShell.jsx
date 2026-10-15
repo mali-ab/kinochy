@@ -28,12 +28,17 @@ function AdminGate({ children }) {
     queryClient.setQueryData(queryKeys.adminSession, next);
   }
 
+  function clearSession() {
+    setAdmin(null);
+    queryClient.setQueryData(queryKeys.viewer, null);
+  }
+
   if (checking) return <div className="status">{t('admin_checking')}</div>;
-  if (!admin) return <AdminLogin onLogin={setAdmin} />;
+  if (!admin) return <div className="status">{t('admin_checking')}</div>;
 
   return (
     <ConfirmProvider>
-      <AdminChrome admin={admin} onLogout={() => setAdmin(null)}>
+      <AdminChrome admin={admin} onLogout={clearSession}>
         {children}
       </AdminChrome>
     </ConfirmProvider>

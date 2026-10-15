@@ -4,10 +4,10 @@ import { useTranslations } from 'use-intl';
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiUpload } from '../api/client';
-import { useGenres } from '../api/hooks.jsx';
+import { useCountries, useGenres } from '../api/hooks.jsx';
 import { adminMovieQuery } from '../api/queries';
 import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
-import { addQualityUpload, cloneMovieForm, countryOptions, formatFileSize, getPerFileProgress, initialMovieForm, movieQualityOptions, movieToForm, range } from './helpers.js';
+import { addQualityUpload, cloneMovieForm, formatFileSize, getPerFileProgress, initialMovieForm, movieQualityOptions, movieToForm, range } from './helpers.js';
 
 /**
  * @param {{ id?: string | null }} props
@@ -18,6 +18,7 @@ export default function AdminMovieEditor({ id = null }) {
   const movieResult = useQuery({ ...adminMovieQuery(id ?? ''), enabled: Boolean(id), retry: false });
   const movie = movieResult.data ?? null;
   const genreCatalog = useGenres();
+  const countries = useCountries();
   const genres = genreCatalog.length ? genreCatalog : [{ code: 'Drama', tm: 'Drama', en: 'Drama', ru: 'Драма' }];
 
   if (id && movieResult.isPending) return <div className="status">Loading editor...</div>;
@@ -36,7 +37,7 @@ export default function AdminMovieEditor({ id = null }) {
   );
 }
 
-function MovieEditor({ movie, genres, onCancel, onSaved }) {
+function MovieEditor({ movie, genres, countries, onCancel, onSaved }) {
   const [form, setForm] = useState(() => cloneMovieForm(movie ? movieToForm(movie) : initialMovieForm));
   const [sourceType, setSourceType] = useState(movie?.streaming?.hls ? 'hls' : 'video');
   const [files, setFiles] = useState({});
@@ -44,6 +45,7 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
   const [qualityUploads, setQualityUploads] = useState(() => (movie?.streaming?.qualities || []).map((quality) => ({ id: `saved-${quality}`, quality, file: null, existing: true })));
   const [coverPreview, setCoverPreview] = useState(movie?.coverUrl || '');
   const [busy, setBusy] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState({ phase: 'idle', percent: 0 });
   const [progress, setProgress] = useState({});
   const [error, setError] = useState('');
   const { locale } = useLocale();
@@ -60,13 +62,23 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
     return () => URL.revokeObjectURL(url);
   }, [files.cover, movie?.coverUrl]);
 
+  useEffect(() => {
+    if (!busy) return undefined;
+    const preventClose = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', preventClose);
+    return () => window.removeEventListener('beforeunload', preventClose);
+  }, [busy]);
+
   function updateField(event) {
     setForm((value) => ({ ...value, [event.target.name]: event.target.value }));
   }
 
   function updateCountries(event) {
     const selected = Array.from(event.target.selectedOptions).map((option) => option.value);
-    setForm((value) => ({ ...value, countries: selected.length ? selected : ['USA'] }));
+    setForm((value) => ({ ...value, countries: selected.length ? selected : ['United States'] }));
   }
 
   function toggleGenre(genre) {
@@ -108,6 +120,7 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
   async function submit(event) {
     event.preventDefault();
     setBusy(true);
+    setUploadStatus({ phase: 'uploading', percent: 0 });
     setError('');
     setProgress({});
     const missingFiles = [];
@@ -116,6 +129,7 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
     if (sourceType === 'hls' && files.video && !files.video.name.toLowerCase().endsWith('.zip') && hlsFiles.length === 0) missingFiles.push('HLS segment files');
     if (missingFiles.length) {
       setBusy(false);
+      setUploadStatus({ phase: 'idle', percent: 0 });
       setError(`Please choose: ${missingFiles.join(', ')}`);
       return;
     }
@@ -134,11 +148,16 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
       const saved = await apiUpload(movie ? `/api/admin/movies/${movie.id}` : '/api/admin/movies', {
         method: movie ? 'PATCH' : 'POST',
         body,
-        onProgress: (value) => setProgress(getPerFileProgress(value, { ...files, hlsFiles, qualityUploads: selectedQualityUploads.map((item) => item.file) }))
+        onProgress: (value) => {
+          setProgress(getPerFileProgress(value, { ...files, hlsFiles, qualityUploads: selectedQualityUploads.map((item) => item.file) }));
+          setUploadStatus({ phase: value >= 100 ? 'processing' : 'uploading', percent: value });
+        }
       });
+      setUploadStatus({ phase: 'complete', percent: 100 });
       onSaved(saved);
     } catch (err) {
       setError(err.message);
+      setUploadStatus({ phase: 'error', percent: 0 });
     } finally {
       setBusy(false);
     }
@@ -159,8 +178,8 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
       <div className="form-grid">
         <label>{t('admin_title_label')}<input name="title" required value={form.title} onChange={updateField} /></label>
         <label>{t('admin_original_title')}<input name="originalTitle" value={form.originalTitle} onChange={updateField} /></label>
-        <label>{t('admin_year')}<input name="year" value={form.year} onChange={updateField} /></label>
-        <label>{t('admin_country')}<select className="multi-select" multiple value={form.countries} onChange={updateCountries}>{countryOptions.map((country) => <option key={country} value={country}>{country}</option>)}</select></label>
+        <label>{t('admin_year')}<input name="year" type="number" inputMode="numeric" min="1888" max={new Date().getFullYear() + 5} step="1" required value={form.year} onChange={updateField} /></label>
+        <label>{t('admin_country')}<select className="multi-select" multiple value={form.countries} onChange={updateCountries}>{countries.map((country) => <option key={country.code} value={country.name}>{country.name}</option>)}</select></label>
         <label className="wide">{t('admin_genres')}<div className="genre-chips">{genres.map((genre) => <button type="button" key={genre.code} className={form.genres.includes(genre.code) ? 'active' : ''} onClick={() => toggleGenre(genre.code)}>{translateGenre(locale, genre.code, genres)}</button>)}</div></label>
         <label>{t('admin_type')}<select name="type" value={form.type} onChange={updateField}><option value="Movie">{t('movie_type_movie')}</option><option value="Series">{t('movie_type_series')}</option><option value="Cartoon">{t('movie_type_cartoon')}</option></select></label>
         <label>{t('admin_duration')}<div className="duration-picker"><select name="durationHours" value={form.durationHours} onChange={updateField}>{range(0, 6).map((hour) => <option key={hour} value={hour}>{hour} h</option>)}</select><select name="durationMinutes" value={form.durationMinutes} onChange={updateField}>{range(0, 59).map((minute) => <option key={minute} value={minute}>{minute} min</option>)}</select></div></label>
@@ -199,7 +218,24 @@ function MovieEditor({ movie, genres, onCancel, onSaved }) {
       <button className="primary admin-publish" disabled={busy}>
         <Save size={18} /> {busy ? t('admin_uploading') : movie ? 'Save movie' : t('admin_publish')}
       </button>
+      {busy ? <UploadStatus status={uploadStatus} /> : null}
     </form>
+  );
+}
+
+function UploadStatus({ status }) {
+  const processing = status.phase === 'processing';
+  return (
+    <div className="movie-upload-overlay" role="dialog" aria-modal="true" aria-live="polite">
+      <div className="movie-upload-card">
+        <span className="movie-upload-spinner" aria-hidden="true" />
+        <h3>{processing ? 'Preparing your movie…' : 'Uploading movie…'}</h3>
+        <p>{processing ? 'The server is validating playlists, extracting files, and saving the movie.' : 'Keep this page open while your files are transferred.'}</p>
+        <div className="movie-upload-meter"><span style={{ width: `${status.percent}%` }} /></div>
+        <strong>{processing ? 'Processing on server' : `${status.percent}% uploaded`}</strong>
+        <small>Large HLS bundles can take several minutes. Do not close or refresh this page.</small>
+      </div>
+    </div>
   );
 }
 

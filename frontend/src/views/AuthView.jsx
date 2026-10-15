@@ -139,7 +139,8 @@ export default function AuthView({ mode = 'login', embedded = false }) {
 
       const data = await login({ email: form.email, password: form.password });
       setUser(data.user);
-      if (!embedded) router.push('/');
+      setAdmin(data.user.role === 'admin' ? { id: data.user.id, email: data.user.email } : null);
+      if (!embedded) router.push(data.user.role === 'admin' ? '/admin' : '/');
     } catch (err) {
       setError(err.message);
     } finally {

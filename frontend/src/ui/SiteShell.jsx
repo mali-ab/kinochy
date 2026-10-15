@@ -75,6 +75,7 @@ function SiteChrome({ children }) {
   async function logout() {
     await logoutUser();
     setUser(null);
+    setAdmin(null);
     queryClient.invalidateQueries({ queryKey: ['users'] });
     setConfirmLogout(false);
     router.push(homeUrl(locale));

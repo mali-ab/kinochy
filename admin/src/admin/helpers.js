@@ -3,7 +3,7 @@ export const initialMovieForm = {
   originalTitle: '',
   description: '',
   year: '2026',
-  countries: ['USA'],
+  countries: ['United States'],
   genres: ['Drama'],
   type: 'Movie',
   durationHours: '1',
@@ -13,30 +13,6 @@ export const initialMovieForm = {
   accent: 'american',
   ageRating: '16+'
 };
-
-export const countryOptions = [
-  'USA',
-  'United Kingdom',
-  'Canada',
-  'Australia',
-  'New Zealand',
-  'Ireland',
-  'France',
-  'Germany',
-  'Italy',
-  'Spain',
-  'Russia',
-  'Turkmenistan',
-  'Turkey',
-  'India',
-  'Japan',
-  'South Korea',
-  'China',
-  'Mexico',
-  'Brazil',
-  'Argentina',
-  'South Africa'
-];
 
 export const initialUserForm = {
   username: '',
@@ -52,7 +28,7 @@ export const movieQualityOptions = ['144p', '240p', '360p', '480p', '720p', '108
 export function cloneMovieForm(source = initialMovieForm) {
   return {
     ...source,
-    countries: [...(source.countries || ['USA'])],
+    countries: [...(source.countries || ['United States'])],
     genres: [...(source.genres || ['Drama'])]
   };
 }
@@ -81,14 +57,14 @@ export function movieToForm(movie) {
 }
 
 export function parseCountries(value) {
-  if (Array.isArray(value)) return value.length ? value : ['USA'];
+  if (Array.isArray(value)) return value.length ? value.map((country) => country === 'USA' ? 'United States' : country) : ['United States'];
   const text = String(value || '').trim();
-  if (!text) return ['USA'];
+  if (!text) return ['United States'];
   try {
     const parsed = JSON.parse(text);
     if (Array.isArray(parsed) && parsed.length) return parsed;
   } catch {}
-  return text.split(',').map((country) => country.trim()).filter(Boolean);
+  return text.split(',').map((country) => country.trim() === 'USA' ? 'United States' : country.trim()).filter(Boolean);
 }
 
 export function getPerFileProgress(totalProgress, files) {

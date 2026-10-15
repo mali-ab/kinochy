@@ -7,7 +7,7 @@ Kinochy is a movie-based English learning platform with streaming playback, inte
 - Frontend: Next.js App Router (React 19) served by a Node.js runtime
 - Admin: standalone Vite + React SPA (react-router), built static and served under `/admin`
 - Styling: Tailwind CSS
-- Backend: ASP.NET Core 8 Web API
+- Backend: ASP.NET Core 10 Web API
 - Database: PostgreSQL
 - Video playback: HLS.js on the client, with direct video streaming from ASP.NET Core
 - Edge proxy: nginx single origin that serves the admin SPA and proxies the site and API
@@ -39,38 +39,57 @@ Kinochy is a movie-based English learning platform with streaming playback, inte
 - `docker-compose.yml`: production-style Docker deployment
 - `Dockerfile`: application image build
 
-## Installation Without Docker
+## Run Only the Backend Without Docker
 
-These commands use a Unix-style shell (Linux or macOS). Install the .NET 8 SDK, Node.js 22 (including npm), and PostgreSQL 16 or newer. Start the PostgreSQL service and create a database user and database:
+The API can run without Docker and without installing Node.js or starting the frontend. Install the .NET 10 SDK and PostgreSQL 16 or newer, then start PostgreSQL:
 
 ```bash
-psql -U postgres -c "CREATE USER kinochy WITH PASSWORD 'change-me';"
+sudo systemctl enable --now postgresql
+```
+
+Create the local development user and database once:
+
+```bash
+psql -U postgres -c "CREATE USER kinochy WITH PASSWORD 'kinochy';"
 psql -U postgres -c "CREATE DATABASE kinochy OWNER kinochy;"
 ```
 
-If PostgreSQL uses local peer authentication (common on Debian/Ubuntu), run `sudo -u postgres psql` instead of `psql -U postgres`. If your installation uses a different administrator account, run the commands as that account. Replace `change-me` with your own password; URL-encode special characters when putting the password in `DATABASE_URL`. The backend applies `backend/database/schema.sql` when it starts.
+If PostgreSQL uses local peer authentication (common on Debian/Ubuntu), use these commands instead:
 
-Install frontend dependencies and restore the backend packages from the repository root:
+```bash
+sudo -u postgres psql -c "CREATE USER kinochy WITH PASSWORD 'kinochy';"
+sudo -u postgres psql -c "CREATE DATABASE kinochy OWNER kinochy;"
+```
+
+Restore and run the backend from the repository root:
+
+```bash
+dotnet restore backend/Kinochy.Api.csproj
+dotnet run --project backend/Kinochy.Api.csproj
+```
+
+The Development profile listens on `http://0.0.0.0:5000`, connects to the local `kinochy` database, applies `backend/database/schema.sql`, and seeds the default admin and user accounts. Verify it with:
+
+```bash
+curl http://localhost:5000/api/health
+```
+
+Local defaults live in `backend/appsettings.Development.json` and are used only when `ASPNETCORE_ENVIRONMENT=Development`. To use different credentials without editing that file, override them for one run:
+
+```bash
+DATABASE_URL=postgresql://USER:PASSWORD@localhost:5432/DATABASE \
+JWT_SECRET=your-local-secret \
+dotnet run --project backend/Kinochy.Api.csproj
+```
+
+Running only the backend provides the JSON API and media endpoints; it does not provide the Kinochy website UI. Uploaded files are kept in `backend/storage/uploads`.
+
+## Run the Full Application Without Docker
+
+After the backend is running, install Node.js 22 and start Next.js in another terminal:
 
 ```bash
 npm install
-dotnet restore backend/Kinochy.Api.csproj
-```
-
-Start the API in terminal 1:
-
-```bash
-cd backend
-ASPNETCORE_URLS=http://localhost:4000 \
-DATABASE_URL=postgresql://kinochy:change-me@localhost:5432/kinochy \
-CLIENT_ORIGIN=http://localhost:5173 \
-JWT_SECRET=replace-with-a-long-random-secret \
-dotnet run --no-launch-profile
-```
-
-Start Next.js from the repository root in terminal 2:
-
-```bash
 npm run dev:client
 ```
 
@@ -119,8 +138,8 @@ docker compose up -d --build
 
 At API startup, the backend creates or refreshes these built-in accounts:
 
-- Admin: `admin@kinochy.local` / `KinochyAdmin@4321!`
-- User: `user@kinochy.local` / `Kinochy@4321!`
+- Admin: `admin@example.com` / `Salam@123`
+- User: `user@example.com` / `Salam@123`
 
 The credentials are defined in `backend/Data/AccountSeeder.cs`, not `.env`. Change those constants before a public deployment and rebuild the app.
 
@@ -165,7 +184,7 @@ Docker uses port `4000`, the root path `/`, an 8 GiB upload limit, PostgreSQL 16
 - For an adaptive HLS movie, choose **HLS bundle** and upload a ZIP containing `master.m3u8` plus its rendition folders. ZIP paths and playlist references are validated before extraction. A flat `.m3u8` playlist with separately selected media files is also supported.
 - Subtitle uploads accept separate SRT/VTT files or one ZIP bundle. Include `en`/`english` and `ru`/`russian` in filenames, for example `movie.en.srt` and `movie.ru.srt`; archive paths, file count, and extracted size are validated.
 - To convert an existing video into this format, see the [local movie tools](scripts/local_movies/README.md).
-- `API_ORIGIN`: address the Next.js server proxies `/api` and `/media` requests to; defaults to `http://localhost:4000` outside Docker and is set to `http://app:4000` by Compose
+- `API_ORIGIN`: address the Next.js server proxies `/api` and `/media` requests to; defaults to `http://localhost:5000` outside Docker and is set to `http://app:4000` by Compose
 
 ## Production Notes
 
