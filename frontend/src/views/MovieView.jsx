@@ -93,7 +93,11 @@ export default function MovieView({ slug }) {
       { onSuccess: () => setSavedWords((current) => new Set(current).add(word)) }
     );
   }
-
+ const diff = movie.difficulty || 'medium';
+    // Determine how many bars to light up (1 for easy, 2 for medium, 3 for hard)
+    const activeCount = diff === 'easy' ? 1 : diff === 'hard' ? 3 : 2;
+    // Determine the active color class
+    const colorClass = diff === 'easy' ? 'bg-green-500' : diff === 'hard' ? 'bg-red-500' : 'bg-yellow-500';
   return (
     <section className="movie-page">
       <div className="movie-detail">
@@ -125,7 +129,18 @@ export default function MovieView({ slug }) {
               <Star size={16} fill="currentColor" /> {Number(movie.rating || 8).toFixed(1)} / 10
             </dd>
             <dt>{t('difficulty')}</dt>
-            <dd><span className={`difficulty-level ${movie.difficulty || 'medium'}`}>{difficultyLabel(movie.difficulty || 'medium')}</span></dd>
+            <dd>
+              <span className="difficulty-poster flex items-center gap-0.5" style={{ backgroundColor: 'transparent', position: "relative" }}>
+            {[1, 2, 3].map((barIndex) => (
+              <span
+                key={barIndex}
+                className={`h-3 w-1 rounded-xs transition-colors ${
+                  barIndex <= activeCount ? colorClass : 'bg-white/30'
+                }`}
+              />
+            ))}
+          </span>
+              </dd>
             <dt>{t('accent')}</dt>
             <dd>{movie.accent ? accentLabel(movie.accent) : '—'}</dd>
             <dt>{t('subtitles')}</dt>

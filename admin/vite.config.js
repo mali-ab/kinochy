@@ -7,7 +7,7 @@ import react from '@vitejs/plugin-react';
 //   /media to the ASP.NET app, so relative requests just work.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const apiOrigin = process.env.VITE_API_ORIGIN || env.VITE_API_ORIGIN || 'http://192.168.137.102:4000';
+  const apiOrigin = process.env.VITE_API_ORIGIN || env.VITE_API_ORIGIN || 'http://192.168.137.102:5000';
   const base = process.env.APP_BASE_PATH || env.APP_BASE_PATH || '/';
 
   return {

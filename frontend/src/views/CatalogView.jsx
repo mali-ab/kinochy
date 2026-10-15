@@ -89,8 +89,8 @@ export default function CatalogView({ categoryKey = null, genreCode = null }) {
               alt=""
               fill
               priority
-              sizes="66vw"
-              style={{ inset: '-50% -2% -50% auto', }}
+              // Tells the browser: on mobile use full width (100vw), on desktop use 66vw
+              sizes="(max-width: 768px) 100vw, 66vw"
             />
           ) : null}
           <div className="catalog-feature-copy">
@@ -148,50 +148,74 @@ export default function CatalogView({ categoryKey = null, genreCode = null }) {
       {!loading && !catalog.length ? <div className="empty-state">{emptyLabel}</div> : null}
 
       <div className="movie-grid" aria-busy={loading || undefined}>
-        {loading ? Array.from({ length: 12 }, (_, index) => <MovieCardSkeleton key={index} />) : catalog.map((movie, index) => (
-          <Link key={movie.id} className="movie-card" href={movieUrl(locale, movie)}>
-            <div className="poster" style={!movie.coverUrl ? { background: moviePosterFallback(movie) } : undefined}>
-              {movie.coverUrl ? (
-                <Image
-                  className="poster-image"
-                  src={movie.coverUrl}
-                  alt={movie.title}
-                  fill
-                  priority={index < 2}
-                  sizes="(max-width: 620px) 45vw, (max-width: 980px) 30vw, 174px"
-                />
-              ) : null}
-              <span className={`difficulty-poster ${movie.difficulty || 'medium'}`}>{difficultyLabel(movie.difficulty || 'medium')}</span>
-              <span className="age">{movie.ageRating || '16+'}</span>
-              {favoriteIds.includes(movie.id) ? (
-                <span className="favorite-badge" title={t('nav_favorites')}>
-                  <Heart size={15} fill="currentColor" />
-                </span>
-              ) : null}
-              <span className="kind">{movie.type === 'Series' ? t('movie_type_series') : movie.type === 'Cartoon' ? t('movie_type_cartoon') : t('movie_type_movie')}</span>
-              <span className="score">
-                <Star size={13} fill="currentColor" /> {Number(movie.rating || 8).toFixed(1)}
-              </span>
-              {!movie.coverUrl ? (
-                <div className="poster-title">
-                  <span>{movie.genres?.[0] ? genreLabel(movie.genres[0], genres) : movie.genre || 'English'}</span>
-                  <strong>{movie.title}</strong>
-                </div>
-              ) : null}
-              <span className="poster-hover">
-                <span className="poster-hover-play"><Play size={18} fill="currentColor" /></span>
-                <strong>{movie.title}</strong>
-                <small>{movie.genres?.[0] ? genreLabel(movie.genres[0], genres) : movie.genre || t('movie_type_movie')}<br />{movie.year || '—'}</small>
-              </span>
+  {loading ? Array.from({ length: 12 }, (_, index) => <MovieCardSkeleton key={index} />) : catalog.map((movie, index) => {
+    const diff = movie.difficulty || 'medium';
+    // Determine how many bars to light up (1 for easy, 2 for medium, 3 for hard)
+    const activeCount = diff === 'easy' ? 1 : diff === 'hard' ? 3 : 2;
+    // Determine the active color class
+    const colorClass = diff === 'easy' ? 'bg-green-500' : diff === 'hard' ? 'bg-red-500' : 'bg-yellow-500';
+
+    return (
+      <Link key={movie.id} className="movie-card" href={movieUrl(locale, movie)}>
+        <div className="poster" style={!movie.coverUrl ? { background: moviePosterFallback(movie) } : undefined}>
+          {movie.coverUrl ? (
+            <Image
+              className="poster-image"
+              src={movie.coverUrl}
+              alt={movie.title}
+              fill
+              priority={index < 2}
+              sizes="(max-width: 620px) 45vw, (max-width: 980px) 30vw, 174px"
+            />
+          ) : null}
+          
+          {/* 3-Stick Difficulty Indicator */}
+          <span className="difficulty-poster flex items-center gap-0.5">
+            {[1, 2, 3].map((barIndex) => (
+              <span
+                key={barIndex}
+                className={`h-3 w-1 rounded-xs transition-colors ${
+                  barIndex <= activeCount ? colorClass : 'bg-white/30'
+                }`}
+              />
+            ))}
+          </span>
+
+          <span className="age">{movie.ageRating || '16+'}</span>
+          {favoriteIds.includes(movie.id) ? (
+            <span className="favorite-badge" title={t('nav_favorites')}>
+              <Heart size={15} fill="currentColor" />
+            </span>
+          ) : null}
+          <span className="kind">{movie.type === 'Series' ? t('movie_type_series') : movie.type === 'Cartoon' ? t('movie_type_cartoon') : t('movie_type_movie')}</span>
+          <span className="score">
+            <Star size={13} fill="currentColor" /> {Number(movie.rating || 8).toFixed(1)}
+          </span>
+          {!movie.coverUrl ? (
+            <div className="poster-title">
+              <span>{movie.genres?.[0] ? genreLabel(movie.genres[0], genres) : movie.genre || 'English'}</span>
+              <strong>{movie.title}</strong>
             </div>
-            <div className="movie-card-copy">
-              <strong className="movie-title">{movie.title}</strong>
-              <span className="movie-card-details">{movie.year || '—'} <span>·</span> {movie.genres?.[0] ? genreLabel(movie.genres[0], genres) : movie.genre || t('movie_type_movie')} <span>·</span> <span className={`difficulty-inline ${movie.difficulty || 'medium'}`}>{difficultyLabel(movie.difficulty || 'medium')}</span></span>
-              <ArrowUpRight className="movie-card-arrow" size={17} aria-hidden="true" />
-            </div>
-          </Link>
-        ))}
-      </div>
+          ) : null}
+          <span className="poster-hover">
+            <span className="poster-hover-play"><Play size={18} fill="currentColor" /></span>
+            <strong>{movie.title}</strong>
+            <small>{movie.genres?.[0] ? genreLabel(movie.genres[0], genres) : movie.genre || t('movie_type_movie')}<br />{movie.year || '—'}</small>
+          </span>
+        </div>
+        <div className="movie-card-copy">
+          <strong className="movie-title">{movie.title}</strong>
+          <span className="movie-card-details">
+            {movie.year || '—'} <span>·</span> {movie.genres?.[0] ? genreLabel(movie.genres[0], genres) : movie.genre || t('movie_type_movie')} <span>·</span> 
+            {/* You can also use the same sticks here or keep text, depending on design */}
+            <span className={`difficulty-inline ${diff}`}>{difficultyLabel(diff)}</span>
+          </span>
+          <ArrowUpRight className="movie-card-arrow" size={17} aria-hidden="true" />
+        </div>
+      </Link>
+    );
+  })}
+</div>
     </section>
   );
 }
