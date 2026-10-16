@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NODE_IMAGE: node:22-alpine
+        NODE_IMAGE: node:22-bookworm-slim
         # Bake the API origin only if this container must proxy /api and /media
         # itself via Next rewrites. Leave empty when an upstream reverse proxy
         # (e.g. the nginx edge) already handles those paths.

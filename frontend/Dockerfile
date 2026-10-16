@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG NODE_IMAGE=node:22-alpine
+ARG NODE_IMAGE=node:22-bookworm-slim
 
 # ---------- 1. Dependencies (cached layer) ----------
 FROM ${NODE_IMAGE} AS deps
@@ -37,7 +37,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV HOSTNAME=0.0.0.0
 ENV PORT=5173
-# node:22-alpine ships an unprivileged "node" user
+# Official node images ship an unprivileged "node" user
 USER node
 COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
