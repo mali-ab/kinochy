@@ -1,4 +1,4 @@
-ARG NODE_IMAGE=node:22-alpine
+ARG NODE_IMAGE=node:22-bookworm-slim
 ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
 ARG DOTNET_RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0
 ARG NGINX_IMAGE=nginx:1.27-alpine

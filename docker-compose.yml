@@ -20,7 +20,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NODE_IMAGE: node:22-alpine
+        NODE_IMAGE: node:22-bookworm-slim
         DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0}
         DOTNET_RUNTIME_IMAGE: ${DOTNET_RUNTIME_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0}
     container_name: kinochy_app
@@ -51,7 +51,7 @@ services:
       dockerfile: Dockerfile
       target: frontend-runtime
       args:
-        NODE_IMAGE: node:22-alpine
+        NODE_IMAGE: node:22-bookworm-slim
     container_name: kinochy_frontend
     restart: unless-stopped
     depends_on:
@@ -70,7 +70,7 @@ services:
       dockerfile: Dockerfile
       target: admin-runtime
       args:
-        NODE_IMAGE: node:22-alpine
+        NODE_IMAGE: node:22-bookworm-slim
         NGINX_IMAGE: ${NGINX_IMAGE:-nginx:1.27-alpine}
     container_name: kinochy_edge
     restart: unless-stopped
@@ -78,7 +78,7 @@ services:
       - app
       - frontend
     ports:
-      - "4000:80"
+      - "80:80"
 
 volumes:
   postgres_data:
