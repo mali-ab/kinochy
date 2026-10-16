@@ -8,6 +8,7 @@ const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 const basePath = normalizeBasePath(process.env.APP_BASE_PATH ?? process.env.NEXT_PUBLIC_BASE_PATH ?? '');
 
 const config: NextConfig = {
+  output: 'standalone',
   basePath,
   poweredByHeader: false,
   reactStrictMode: true,

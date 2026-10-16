@@ -208,7 +208,8 @@ export default function MovieView({ slug }) {
         {commentError ? <p className="form-error" role="alert">{commentError}</p> : null}
         {comments.length ? <div className="movie-comment-list">{comments.map((comment) => (
           <article className="movie-comment" key={comment.id}>
-            <div className="movie-comment-meta"><span className="movie-comment-avatar" aria-hidden="true">{comment.username?.charAt(0)?.toUpperCase()}</span><strong>{comment.username}</strong><time dateTime={comment.createdAt}>{formatCommentDate(comment.createdAt, locale)}</time>{viewer?.id === comment.userId ? <button type="button" onClick={() => deleteComment(comment.id)} aria-label={t('movie_comment_delete')}><Trash2 size={16} /></button> : null}</div>
+           {/* FIX */}
+            {/* <div className="movie-comment-meta"><span className="movie-comment-avatar" aria-hidden="true">{comment.username?.charAt(0)?.toUpperCase()}</span><strong>{comment.username}</strong><time dateTime={comment.createdAt}>{formatCommentDate(comment.createdAt, locale)}</time>{viewer?.id === comment.userId ? <button type="button" onClick={() => deleteComment(comment.id)} aria-label={t('movie_comment_delete')}><Trash2 size={16} /></button> : null}</div> */}
             <p>{comment.body}</p>
           </article>
         ))}</div> : <p className="movie-extras-empty">{t('movie_comments_empty')}</p>}

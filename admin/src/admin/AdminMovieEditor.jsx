@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiUpload } from '../api/client';
 import { scanMediaLibrary } from '../api/endpoints';
-import { useCountries, useGenres } from '../api/hooks.jsx';
+import { useGenres } from '../api/hooks.jsx';
 import { adminMovieQuery } from '../api/queries';
 import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
 import { addQualityUpload, cloneMovieForm, formatFileSize, getPerFileProgress, initialMovieForm, movieQualityOptions, movieToForm, range } from './helpers.js';

@@ -127,17 +127,17 @@ export default function MoviePlayer({ movie, subtitles, access }) {
       if (Hls.isSupported()) {
         const compactConfig = isCompactPlayback()
           ? {
-              backBufferLength: 2,
-              maxBufferLength: 4,
-              maxMaxBufferLength: 6,
-              maxBufferSize: 4 * 1000 * 1000
-            }
+            backBufferLength: 2,
+            maxBufferLength: 4,
+            maxMaxBufferLength: 6,
+            maxBufferSize: 4 * 1000 * 1000
+          }
           : {
-              backBufferLength: 8,
-              maxBufferLength: 8,
-              maxMaxBufferLength: 12,
-              maxBufferSize: 12 * 1000 * 1000
-            };
+            backBufferLength: 8,
+            maxBufferLength: 8,
+            maxMaxBufferLength: 12,
+            maxBufferSize: 12 * 1000 * 1000
+          };
         hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
@@ -386,14 +386,24 @@ export default function MoviePlayer({ movie, subtitles, access }) {
   function fullscreen() {
     const shell = videoRef.current?.closest('.player-shell');
     if (!shell) return;
-    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
+
+    const fullscreenElement =
+      document.fullscreenElement || document.webkitFullscreenElement;
+
     if (fullscreenElement) {
-      document.exitFullscreen?.();
-      document.webkitExitFullscreen?.();
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      } else {
+        document.webkitExitFullscreen?.();
+      }
       return;
     }
-    const request = shell.requestFullscreen?.() || shell.webkitRequestFullscreen?.();
-    request?.catch?.(() => {});
+
+    if (shell.requestFullscreen) {
+      shell.requestFullscreen().catch(() => { });
+    } else if (shell.webkitRequestFullscreen) {
+      shell.webkitRequestFullscreen();
+    }
   }
 
   function changeQuality(levelIndex) {
@@ -558,7 +568,7 @@ export default function MoviePlayer({ movie, subtitles, access }) {
     video.preload = 'auto';
     try {
       hlsRef.current?.startLoad?.(video.currentTime || 0);
-    } catch {}
+    } catch { }
     setPlayRequested(true);
     setVideoLoading(needsMoreVideoData(video));
     playTimeoutRef.current = window.setTimeout(() => {
@@ -608,7 +618,7 @@ export default function MoviePlayer({ movie, subtitles, access }) {
           `/api/users/vocabulary/check?word=${encodeURIComponent(cleanWord)}&sourceLanguage=${encodeURIComponent(lang)}&targetLanguage=${encodeURIComponent(target)}`
         );
         saved = Boolean(check.entry);
-      } catch {}
+      } catch { }
       if (lookupRequestRef.current !== requestId) return;
       setLookup({
         word: cleanWord,
@@ -785,6 +795,120 @@ export default function MoviePlayer({ movie, subtitles, access }) {
           onTimeUpdate={handleTimeUpdate}
         />
 
+
+        <div className='player-navigations absolute w-full z-10 bottom-0'>
+          <div className="timeline">
+            <input
+              type="range"
+              min="0"
+              max={Number.isFinite(playableDuration) ? playableDuration : 0}
+              step="0.01"
+              value={Math.min(currentTime, Number.isFinite(playableDuration) ? playableDuration : currentTime)}
+              onInput={scrub}
+              onChange={commitScrub}
+              onPointerUp={(event) => commitScrubValue(Number(event.currentTarget.value))}
+              onTouchEnd={(event) => commitScrubValue(Number(event.currentTarget.value))}
+              onKeyUp={(event) => {
+                if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
+                  commitScrubValue(Number(event.currentTarget.value));
+                }
+              }}
+              style={{ '--progress': `${playableDuration ? (currentTime / playableDuration) * 100 : 0}%` }}
+              aria-label={t('player_seek')}
+            />
+          </div>
+
+
+
+          <div className="player-controls">
+            <div className="compact-stack">
+              <button
+                title={t('player_subtitle_style')}
+                onClick={() =>
+                  setSubtitleStyle((value) => ({ ...value, en: Math.min(value.en + 1, 44), ru: Math.min(value.ru + 1, 40) }))
+                }
+              >
+                +
+              </button>
+              <button
+                title={t('player_subtitle_style')}
+                onClick={() =>
+                  setSubtitleStyle((value) => ({ ...value, en: Math.max(value.en - 1, 18), ru: Math.max(value.ru - 1, 16) }))
+                }
+              >
+                -
+              </button>
+            </div>
+            <button
+              className={settingsOpen ? 'active' : ''}
+              title={t('player_subtitle_style')}
+              aria-label={t('player_subtitle_style')}
+              aria-expanded={settingsOpen}
+              onClick={() => {
+                setPlayerToolsOpen(false);
+                setSettingsOpen((value) => !value);
+              }}
+            >
+              Aa
+            </button>
+            <button className={realtimeEnglish ? 'active' : ''} aria-label={t('admin_subtitle_en')} aria-pressed={realtimeEnglish} onClick={() => setRealtimeEnglish((value) => !value)}>
+              EN
+            </button>
+            <button className={realtimeRussian ? 'active' : ''} aria-label={t('admin_subtitle_ru')} aria-pressed={realtimeRussian} onClick={() => setRealtimeRussian((value) => !value)} disabled={!russian.length}>
+              RU
+            </button>
+            <button className="playbar" onClick={togglePlay} aria-label={playing || playRequested ? t('player_pause') || 'Pause' : t('player_play') || 'Play'}>
+              {playing || playRequested ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" />}
+            </button>
+            <span className="time-readout">
+              {formatTime(currentTime)} / {formatTime(duration)}
+            </span>
+            <button
+              className={playerToolsOpen ? 'active' : ''}
+              title={t('player_tools')}
+              aria-label={t('player_tools')}
+              aria-expanded={playerToolsOpen}
+              onClick={() => {
+                setSettingsOpen(false);
+                setPlayerToolsOpen((value) => !value);
+              }}
+            >
+              <Settings size={22} />
+            </button>
+            <button
+              className="cast-button"
+              title={t('player_cast')}
+              onClick={() => {
+                const video = videoRef.current;
+                if (video?.remote?.prompt) video.remote.prompt().catch(() => { });
+                else video?.webkitShowPlaybackTargetPicker?.();
+              }}
+            >
+              <Cast size={21} />
+            </button>
+            <div className={`volume-control ${volumeOpen ? 'open' : ''}`}>
+              <button title={t('player_volume')} onClick={() => setVolumeOpen((value) => !value)} aria-expanded={volumeOpen}>
+                {volume <= 0 ? <VolumeX size={22} /> : volume < 0.45 ? <Volume1 size={22} /> : <Volume2 size={22} />}
+              </button>
+              <div className="volume-slider" onClick={(event) => event.stopPropagation()}>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={volume}
+                  onInput={(event) => setVolume(Number(event.currentTarget.value))}
+                  onChange={(event) => setVolume(Number(event.currentTarget.value))}
+                  style={{ '--volume': `${volume * 100}%` }}
+                  aria-label={t('player_volume')}
+                />
+              </div>
+            </div>
+            <button title={t('player_fullscreen')} onClick={fullscreen}>
+              <Expand size={22} />
+            </button>
+          </div>
+        </div>
         {!hasFullAccess && !previewEnded ? <div className="free-preview-chip"><Crown size={14} /> Free preview · {formatTime(Math.max(0, previewSeconds - currentTime))} left</div> : null}
 
         {showPlayerLoader ? (
@@ -811,7 +935,7 @@ export default function MoviePlayer({ movie, subtitles, access }) {
             gridOn={pausedGrid}
             liveOverlayActive={liveOverlayActive}
             scrollIndex={scrollIndex}
-          onPlay={() => {
+            onPlay={() => {
               closePanels();
               togglePlay();
             }}
@@ -876,115 +1000,9 @@ export default function MoviePlayer({ movie, subtitles, access }) {
 
       <div className="fullscreen-controls-hotspot" aria-hidden="true" onPointerEnter={() => revealControls(controlsPinned)} onPointerMove={() => revealControls(controlsPinned)} />
 
-      <div className="timeline">
-        <input
-          type="range"
-          min="0"
-          max={Number.isFinite(playableDuration) ? playableDuration : 0}
-          step="0.01"
-          value={Math.min(currentTime, Number.isFinite(playableDuration) ? playableDuration : currentTime)}
-          onInput={scrub}
-          onChange={commitScrub}
-          onPointerUp={(event) => commitScrubValue(Number(event.currentTarget.value))}
-          onTouchEnd={(event) => commitScrubValue(Number(event.currentTarget.value))}
-          onKeyUp={(event) => {
-            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
-              commitScrubValue(Number(event.currentTarget.value));
-            }
-          }}
-          style={{ '--progress': `${playableDuration ? (currentTime / playableDuration) * 100 : 0}%` }}
-          aria-label={t('player_seek')}
-        />
-      </div>
 
-      <div className="player-controls">
-        <div className="compact-stack">
-          <button
-            title={t('player_subtitle_style')}
-            onClick={() =>
-              setSubtitleStyle((value) => ({ ...value, en: Math.min(value.en + 1, 44), ru: Math.min(value.ru + 1, 40) }))
-            }
-          >
-            +
-          </button>
-          <button
-            title={t('player_subtitle_style')}
-            onClick={() =>
-              setSubtitleStyle((value) => ({ ...value, en: Math.max(value.en - 1, 18), ru: Math.max(value.ru - 1, 16) }))
-            }
-          >
-            -
-          </button>
-        </div>
-        <button
-          className={settingsOpen ? 'active' : ''}
-          title={t('player_subtitle_style')}
-          aria-label={t('player_subtitle_style')}
-          aria-expanded={settingsOpen}
-          onClick={() => {
-            setPlayerToolsOpen(false);
-            setSettingsOpen((value) => !value);
-          }}
-        >
-          Aa
-        </button>
-        <button className={realtimeEnglish ? 'active' : ''} aria-label={t('admin_subtitle_en')} aria-pressed={realtimeEnglish} onClick={() => setRealtimeEnglish((value) => !value)}>
-          EN
-        </button>
-        <button className={realtimeRussian ? 'active' : ''} aria-label={t('admin_subtitle_ru')} aria-pressed={realtimeRussian} onClick={() => setRealtimeRussian((value) => !value)} disabled={!russian.length}>
-          RU
-        </button>
-        <button className="playbar" onClick={togglePlay} aria-label={playing || playRequested ? t('player_pause') || 'Pause' : t('player_play') || 'Play'}>
-          {playing || playRequested ? <Pause size={28} fill="currentColor" /> : <Play size={28} fill="currentColor" />}
-        </button>
-        <span className="time-readout">
-          {formatTime(currentTime)} / {formatTime(duration)}
-        </span>
-        <button
-          className={playerToolsOpen ? 'active' : ''}
-          title={t('player_tools')}
-          aria-label={t('player_tools')}
-          aria-expanded={playerToolsOpen}
-          onClick={() => {
-            setSettingsOpen(false);
-            setPlayerToolsOpen((value) => !value);
-          }}
-        >
-          <Settings size={22} />
-        </button>
-        <button
-          className="cast-button"
-          title={t('player_cast')}
-          onClick={() => {
-            const video = videoRef.current;
-            if (video?.remote?.prompt) video.remote.prompt().catch(() => {});
-            else video?.webkitShowPlaybackTargetPicker?.();
-          }}
-        >
-          <Cast size={21} />
-        </button>
-        <div className={`volume-control ${volumeOpen ? 'open' : ''}`}>
-          <button title={t('player_volume')} onClick={() => setVolumeOpen((value) => !value)} aria-expanded={volumeOpen}>
-            {volume <= 0 ? <VolumeX size={22} /> : volume < 0.45 ? <Volume1 size={22} /> : <Volume2 size={22} />}
-          </button>
-          <div className="volume-slider" onClick={(event) => event.stopPropagation()}>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={volume}
-              onInput={(event) => setVolume(Number(event.currentTarget.value))}
-              onChange={(event) => setVolume(Number(event.currentTarget.value))}
-              style={{ '--volume': `${volume * 100}%` }}
-              aria-label={t('player_volume')}
-            />
-          </div>
-        </div>
-        <button title={t('player_fullscreen')} onClick={fullscreen}>
-          <Expand size={22} />
-        </button>
-      </div>
+
+
 
       {settingsOpen ? <SubtitleSettings style={subtitleStyle} setStyle={setSubtitleStyle} /> : null}
       {playerToolsOpen ? (
@@ -1583,7 +1601,7 @@ function useCompactPlayer() {
 function safePlay(video) {
   const playPromise = video?.play?.();
   if (playPromise && typeof playPromise.catch === 'function') {
-    return playPromise.catch(() => {});
+    return playPromise.catch(() => { });
   }
   return Promise.resolve();
 }
@@ -1604,12 +1622,12 @@ function seekVideo(video, time, shouldLoad, hls) {
   const next = Math.max(0, time);
   try {
     hls?.stopLoad?.();
-  } catch {}
+  } catch { }
   const remembered = setVideoTime(video, next);
   if (shouldLoad) {
     try {
       hls?.startLoad?.(remembered);
-    } catch {}
+    } catch { }
   }
   return remembered;
 }

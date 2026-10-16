@@ -1,0 +1,484 @@
+/* Auth page — "The page is the object" art direction (taste-skill).
+   The login panel is a cinema ticket stub resting on a full-bleed wall of real
+   film covers. House style: flat fills, tone steps (not lines/shadows), square
+   corners, one accent, poster display type. No glass, gradients, glows,
+   eyebrows or icon cards. */
+
+.auth-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: calc(100vh - 66px);
+  min-height: calc(100dvh - 66px);
+  margin: 0;
+  padding: clamp(24px, 4vh, 56px) clamp(20px, 5vw, 72px);
+  overflow: hidden;
+  background: #0b1120;
+  color: #f5f7f8;
+  font-family: system-ui, "Segoe UI", sans-serif;
+}
+
+/* --- Full-bleed cover wall, tilted into a slight 3D board --- */
+.auth-coverwall {
+  position: absolute;
+  /* Expand past the stage so the 3D tilt never reveals an edge; the stage
+     clips the overflow. */
+  inset: -14% -10%;
+  z-index: 0;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  pointer-events: none;
+  transform: perspective(1600px) rotateY(-7deg) rotateX(3.5deg);
+  transform-style: preserve-3d;
+}
+
+.auth-covercol {
+  display: flex;
+  flex: 0 1 clamp(120px, 15vw, 210px);
+  flex-direction: column;
+  gap: 10px;
+  /* Only `transform` animates and each column is its own composited layer,
+     so the whole wall drifts on the GPU. */
+  will-change: transform;
+  backface-visibility: hidden;
+  animation: auth-drift-up 54s linear infinite;
+}
+
+/* Alternate the columns: odd climb, even sink, at slightly different slow
+   speeds so the wall never reads as one synchronized block. `linear` keeps
+   the loop continuous (the list is duplicated, so -50% == 0). */
+.auth-covercol:nth-child(even) {
+  animation-name: auth-drift-down;
+  animation-duration: 66s;
+}
+
+.auth-covercol:nth-child(3n) {
+  animation-duration: 60s;
+}
+
+@keyframes auth-drift-up {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+
+@keyframes auth-drift-down {
+  from {
+    transform: translateY(-50%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.auth-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  border: 0;
+  border-radius: 0;
+  object-fit: cover;
+}
+
+.auth-cover-fallback {
+  display: grid;
+  place-items: center;
+  color: rgba(245, 247, 248, 0.55);
+  font-family: var(--font-display, system-ui), sans-serif;
+  font-size: 46px;
+}
+
+/* Flat neutral scrim: the one allowed "gradient" substitute, for legibility. */
+.auth-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: rgba(8, 12, 22, 0.78);
+}
+
+/* --- Content: playbill (left) + ticket (right) --- */
+.auth-layout {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+  gap: clamp(32px, 5vw, 84px);
+  align-items: center;
+  width: min(1120px, 100%);
+}
+
+.auth-playbill {
+  max-width: 560px;
+}
+
+.auth-claim {
+  margin: 0 0 18px;
+  color: #f5f7f8;
+  font-family: var(--font-display, system-ui), sans-serif;
+  font-weight: 400;
+  font-size: clamp(40px, 5.4vw, 68px);
+  line-height: 0.92;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+  text-wrap: balance;
+  animation: auth-rise 0.5s ease-out both;
+}
+
+.auth-lead {
+  max-width: 44ch;
+  margin: 0 0 30px;
+  color: #c3d0dd;
+  font-size: clamp(17px, 1.35vw, 20px);
+  line-height: 1.5;
+  animation: auth-rise 0.5s ease-out 0.08s both;
+}
+
+.auth-steps {
+  display: grid;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.auth-steps li {
+  display: grid;
+  grid-template-columns: minmax(9ch, 13ch) 1fr;
+  gap: 18px;
+  align-items: baseline;
+  animation: auth-rise 0.5s ease-out both;
+}
+
+.auth-steps li:nth-child(1) {
+  animation-delay: 0.16s;
+}
+.auth-steps li:nth-child(2) {
+  animation-delay: 0.24s;
+}
+.auth-steps li:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+.auth-step-term {
+  color: #f5f7f8;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.auth-step-desc {
+  color: #aebccb;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+/* --- The ticket --- */
+.auth-ticket {
+  overflow: hidden;
+  border-radius: 0;
+  background: #131f36;
+  animation: auth-rise 0.5s ease-out 0.1s both;
+}
+
+.auth-ticket-head {
+  padding: 22px 28px 18px;
+  background: #0f1a2e;
+}
+
+.auth-stripe {
+  display: flex;
+  height: 10px;
+  margin-bottom: 20px;
+}
+
+.auth-stripe i {
+  flex: 1;
+  background: #06b6d4;
+}
+
+.auth-stripe i:nth-child(even) {
+  background: #0b1120;
+}
+
+.auth-wordmark {
+  display: block;
+  color: #f5f7f8;
+  font-family: var(--font-display, system-ui), sans-serif;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.auth-admit {
+  display: block;
+  margin-top: 5px;
+  color: #9fb0c2;
+  font-size: 14px;
+}
+
+/* Perforation: dotted tear line with side notches cut in the page colour. */
+.auth-perf {
+  position: relative;
+  display: block;
+  height: 4px;
+  background: #131f36;
+  border-top: 4px dotted rgba(159, 176, 194, 0.55);
+}
+
+.auth-perf::before,
+.auth-perf::after {
+  position: absolute;
+  top: -15px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #0b1120;
+  content: "";
+}
+
+.auth-perf::before {
+  left: -13px;
+}
+
+.auth-perf::after {
+  right: -13px;
+}
+
+/* --- The form on the ticket --- */
+.auth-panel {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  margin: 0;
+  padding: 26px 28px 28px;
+  border: 0;
+  border-radius: 0;
+  background: #131f36;
+  box-shadow: none; /* taste-skill-ignore: resets a leaked legacy shadow, adds none */
+}
+
+.auth-panel h1 {
+  margin: 0 0 4px;
+  color: #f5f7f8;
+  font-family: var(--font-display, system-ui), sans-serif;
+  font-weight: 400;
+  font-size: clamp(30px, 3.4vw, 40px);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.auth-panel label {
+  display: grid;
+  gap: 7px;
+  color: #c3d0dd;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.auth-panel input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 0;
+  color: #f5f7f8;
+  background: #0c1526;
+  outline: none;
+  transition: border-color 0.16s ease;
+}
+
+.auth-panel input::placeholder {
+  color: #647a92;
+}
+
+.auth-panel input:focus {
+  border-color: #22d3ee;
+}
+
+.field-icon {
+  position: relative;
+  display: block;
+}
+
+.field-leading {
+  position: absolute;
+  top: 50%;
+  left: 13px;
+  color: #7f93a8;
+  transform: translateY(-50%);
+  pointer-events: none;
+  transition: color 0.16s ease;
+}
+
+.field-icon:focus-within .field-leading {
+  color: #22d3ee;
+}
+
+.field-icon input {
+  padding-left: 41px;
+}
+
+.password-field input {
+  padding-right: 48px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 9px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 0;
+  color: #aebccb;
+  background: transparent;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.password-toggle:hover {
+  color: #22d3ee;
+}
+
+.auth-panel .primary {
+  min-height: 52px;
+  border: 0;
+  border-radius: 0;
+  color: #05252b;
+  background: #06b6d4;
+  box-shadow: none; /* taste-skill-ignore: resets a global shadow, adds none */
+  font-size: 16px;
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    transform 0.12s ease;
+}
+
+.auth-panel .primary:hover:not(:disabled) {
+  color: #05252b;
+  background: #22d3ee;
+}
+
+.auth-panel .primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.text-link,
+.auth-switch button {
+  padding: 0;
+  border: 0;
+  color: #22d3ee;
+  background: none;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-switch {
+  margin: 0;
+  color: #9fb0c2;
+}
+
+.verify-copy {
+  margin: 0;
+  color: #c3d0dd;
+  line-height: 1.5;
+}
+
+.auth-verify-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.form-error {
+  margin: 0;
+  padding: 11px 14px;
+  border: 0;
+  border-left: 4px solid #fb7185;
+  color: #ffd7db;
+  background: rgba(244, 63, 94, 0.14);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.auth-home-link {
+  color: #9fb0c2;
+}
+
+/* --- Tear-off stub with a real film-strip photograph --- */
+.auth-ticket-stub {
+  padding: 16px 28px 22px;
+  background: #0f1a2e;
+}
+
+.auth-filmstrip {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 0;
+}
+
+.auth-fineprint {
+  margin: 12px 0 0;
+  color: #8093a8;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+/* --- Responsive --- */
+@media (max-width: 980px) {
+  .auth-layout {
+    grid-template-columns: minmax(0, 480px);
+    justify-content: center;
+    gap: 36px;
+  }
+
+  .auth-playbill {
+    max-width: 480px;
+  }
+}
+
+@media (max-width: 560px) {
+  .auth-scrim {
+    background: rgba(8, 12, 22, 0.9);
+  }
+
+  /* On a phone the first screen must hold the headline, the lead and the
+     action. The three supporting points are secondary marketing, so they
+     yield the fold to the login button. */
+  .auth-lead {
+    margin-bottom: 0;
+  }
+  .auth-steps {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-covercol,
+  .auth-covercol:nth-child(even),
+  .auth-covercol:nth-child(3n),
+  .auth-claim,
+  .auth-lead,
+  .auth-steps li,
+  .auth-ticket {
+    animation: none;
+  }
+}
