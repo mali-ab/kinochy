@@ -384,17 +384,27 @@ export default function MoviePlayer({ movie, subtitles, access }) {
   }
 
   function fullscreen() {
-    const shell = videoRef.current?.closest('.player-shell');
-    if (!shell) return;
-    const fullscreenElement = document.fullscreenElement || document.webkitFullscreenElement;
-    if (fullscreenElement) {
-      document.exitFullscreen?.();
+  const shell = videoRef.current?.closest('.player-shell');
+  if (!shell) return;
+
+  const fullscreenElement =
+    document.fullscreenElement || document.webkitFullscreenElement;
+
+  if (fullscreenElement) {
+    if (document.exitFullscreen) {
+      document.exitFullscreen();
+    } else {
       document.webkitExitFullscreen?.();
-      return;
     }
-    const request = shell.requestFullscreen?.() || shell.webkitRequestFullscreen?.();
-    request?.catch?.(() => {});
+    return;
   }
+
+  if (shell.requestFullscreen) {
+    shell.requestFullscreen().catch(() => {});
+  } else if (shell.webkitRequestFullscreen) {
+    shell.webkitRequestFullscreen();
+  }
+}
 
   function changeQuality(levelIndex) {
     const hls = hlsRef.current;

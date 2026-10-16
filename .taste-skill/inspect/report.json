@@ -1,0 +1,1114 @@
+{
+ "url": "http://localhost:4000/en/login",
+ "at": "2026-10-15T17:44:55.277Z",
+ "allow": [],
+ "viewports": [
+  {
+   "width": 1440,
+   "height": 900,
+   "load": "load",
+   "screens": 2,
+   "filled": [
+    1,
+    1
+   ],
+   "motion": {
+    "elements": 1,
+    "css": 0,
+    "transitions": 0,
+    "scripted": 1,
+    "videos": 0,
+    "playingVideos": 0
+   },
+   "metrics": {
+    "viewport": {
+     "w": 1440,
+     "h": 900
+    },
+    "page": {
+     "height": 920,
+     "screens": 1,
+     "words": 112,
+     "img": 66,
+     "video": 0,
+     "canvas": 0,
+     "svg": 9,
+     "sections": 1,
+     "horizontalOverflow": 0,
+     "overflowCulprits": [],
+     "uiFragments": 0,
+     "uiAbuse": false,
+     "realPictures": 65,
+     "videoCount": 0,
+     "uiPictures": 0,
+     "pictureSamples": [
+      "66630efb1db64460a8c64f39ccd828fd.jpg",
+      "wall-projector.jpg",
+      "wall-clapperboard.jpg",
+      "wall-cinema-hall.jpg",
+      "66630efb1db64460a8c64f39ccd828fd.jpg",
+      "wall-projector.jpg",
+      "wall-clapperboard.jpg",
+      "wall-cinema-hall.jpg"
+     ],
+     "blendText": 0,
+     "sideScrollers": 0,
+     "brokenImages": [],
+     "emoji": []
+    },
+    "hero": {
+     "text": "LEARN ENGLISH ONE FILM AT A TIME.",
+     "words": 7,
+     "chars": 33,
+     "lines": 2,
+     "size": 68,
+     "vw": 4.7,
+     "font": "Bebas Neue",
+     "weight": 400,
+     "tracking": 0.005,
+     "leading": 0.92,
+     "upper": true,
+     "italic": false,
+     "mono": false,
+     "align": "left",
+     "position": "left",
+     "widthRatio": 0.39,
+     "top": 263,
+     "tag": "h2",
+     "kind": "heading"
+    },
+    "h1": {
+     "text": "LOGIN",
+     "words": 1,
+     "lines": 1,
+     "size": 40,
+     "font": "Bebas Neue"
+    },
+    "headings": [
+     {
+      "text": "KINOCHY",
+      "words": 1,
+      "chars": 7,
+      "lines": 1,
+      "size": 30,
+      "vw": 2.1,
+      "font": "Bebas Neue",
+      "weight": 400,
+      "tracking": 0.04,
+      "leading": 1,
+      "upper": true,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "right",
+      "widthRatio": 0.25,
+      "top": 154,
+      "tag": "span",
+      "kind": "heading"
+     },
+     {
+      "text": "LOGIN",
+      "words": 1,
+      "chars": 5,
+      "lines": 1,
+      "size": 40,
+      "vw": 2.8,
+      "font": "Bebas Neue",
+      "weight": 400,
+      "tracking": 0.01,
+      "leading": 1,
+      "upper": true,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "right",
+      "widthRatio": 0.25,
+      "top": 258,
+      "tag": "h1",
+      "kind": "heading"
+     },
+     {
+      "text": "LEARN ENGLISH ONE FILM AT A TIME.",
+      "words": 7,
+      "chars": 33,
+      "lines": 2,
+      "size": 68,
+      "vw": 4.7,
+      "font": "Bebas Neue",
+      "weight": 400,
+      "tracking": 0.005,
+      "leading": 0.92,
+      "upper": true,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "left",
+      "widthRatio": 0.39,
+      "top": 263,
+      "tag": "h2",
+      "kind": "heading"
+     }
+    ],
+    "headingSummary": {
+     "count": 3,
+     "maxLines": 2,
+     "over2Lines": 0,
+     "statements": 0,
+     "centered": 0,
+     "medianWords": 1,
+     "mixedFontHeadings": 0
+    },
+    "type": {
+     "families": [
+      {
+       "family": "system-ui",
+       "share": 0.85,
+       "mono": false
+      },
+      {
+       "family": "Avenir Next",
+       "share": 0.08,
+       "mono": false
+      },
+      {
+       "family": "Bebas Neue",
+       "share": 0.07,
+       "mono": false
+      }
+     ],
+     "familyCount": 3,
+     "sizes": [
+      8,
+      12,
+      13,
+      14,
+      15,
+      16,
+      19,
+      22,
+      30,
+      40,
+      68
+     ],
+     "sizeCount": 11,
+     "notLoaded": [
+      "Avenir Next"
+     ],
+     "body": {
+      "font": "system-ui",
+      "size": 19.4,
+      "leading": 1.5,
+      "weight": 400,
+      "tracking": 0,
+      "contrast": 12
+     },
+     "measureChars": 48,
+     "max": {
+      "size": 68,
+      "vw": 4.7,
+      "font": "Bebas Neue",
+      "text": "Learn English one film at a time."
+     },
+     "monoShare": 0,
+     "monoProseShare": 0,
+     "monoFamilies": [],
+     "monoSamples": [],
+     "microLabels": 0,
+     "microLabelShare": 0,
+     "microSamples": [],
+     "upperShare": 0.08,
+     "centerShare": 0.04,
+     "smallText": 0
+    },
+    "eyebrows": [],
+    "numbered": [],
+    "color": {
+     "bodyBg": "#0f172a",
+     "bodyBgHsl": {
+      "h": 222,
+      "s": 0.47,
+      "l": 0.11
+     },
+     "dark": true,
+     "sectionBgs": [
+      {
+       "color": "#0b1120",
+       "top": 66,
+       "hsl": {
+        "h": 223,
+        "s": 0.49,
+        "l": 0.08
+       }
+      }
+     ],
+     "textColors": [
+      {
+       "color": "#aebccb",
+       "share": 0.26
+      },
+      {
+       "color": "#c3d0dd",
+       "share": 0.19
+      },
+      {
+       "color": "#f5f7f8",
+       "share": 0.17
+      },
+      {
+       "color": "#8093a8",
+       "share": 0.16
+      },
+      {
+       "color": "#9fb0c2",
+       "share": 0.11
+      }
+     ],
+     "button": {
+      "bg": "#1e293b",
+      "hsl": {
+       "h": 217,
+       "s": 0.33,
+       "l": 0.17
+      },
+      "fg": "#e2e8f0"
+     },
+     "lowContrast": []
+    },
+    "buttons": {
+     "count": 3,
+     "inHero": 3,
+     "radius": 12,
+     "height": 46,
+     "withShadow": 1,
+     "withGradient": 1,
+     "mono": 0,
+     "upper": 0,
+     "heroLabels": [
+      "LANGUAGE English",
+      "Sign up",
+      "Login"
+     ]
+    },
+    "surfaces": {
+     "shadowStatic": 0,
+     "shadowOverlay": 1,
+     "shadowSamples": [],
+     "gradients": 0,
+     "scrims": 0,
+     "gradientSamples": [],
+     "gradientText": 0,
+     "hairlines": 1,
+     "hairlineSamples": [
+      "header.topbar 1440px"
+     ],
+     "outlinedBoxes": 0,
+     "dashed": 0,
+     "blurred": 1,
+     "roundedBoxes": 0,
+     "boxRadius": 0,
+     "squareMedia": 56,
+     "roundedMedia": 0,
+     "mediaRadius": 0,
+     "textShadow": 0,
+     "cardRows": [
+      {
+       "count": 3,
+       "iconTopped": false,
+       "rounded": false,
+       "top": 102
+      }
+     ]
+    },
+    "heroMedia": [],
+    "nav": {
+     "links": 6,
+     "fixed": true,
+     "height": 66,
+     "floatingPill": false,
+     "blur": true
+    },
+    "fontsLoaded": [
+     "bebas neue",
+     "bebas neue fallback"
+    ]
+   },
+   "consoleErrors": []
+  },
+  {
+   "width": 768,
+   "height": 1024,
+   "load": "load",
+   "screens": 2,
+   "filled": [
+    1,
+    1
+   ],
+   "motion": {
+    "elements": 1,
+    "css": 0,
+    "transitions": 0,
+    "scripted": 1,
+    "videos": 0,
+    "playingVideos": 0
+   },
+   "metrics": {
+    "viewport": {
+     "w": 768,
+     "h": 1024
+    },
+    "page": {
+     "height": 1453,
+     "screens": 1.4,
+     "words": 112,
+     "img": 66,
+     "video": 0,
+     "canvas": 0,
+     "svg": 9,
+     "sections": 1,
+     "horizontalOverflow": 0,
+     "overflowCulprits": [],
+     "uiFragments": 0,
+     "uiAbuse": false,
+     "realPictures": 1,
+     "videoCount": 0,
+     "uiPictures": 0,
+     "pictureSamples": [
+      "image?url=%2F_next%2Fstatic%2Fmedia%2Ffilm-strip"
+     ],
+     "blendText": 0,
+     "sideScrollers": 0,
+     "brokenImages": [],
+     "emoji": []
+    },
+    "hero": {
+     "text": "LEARN ENGLISH ONE FILM AT A TIME.",
+     "words": 7,
+     "chars": 33,
+     "lines": 1,
+     "size": 41.5,
+     "vw": 5.4,
+     "font": "Bebas Neue",
+     "weight": 400,
+     "tracking": 0.005,
+     "leading": 0.92,
+     "upper": true,
+     "italic": false,
+     "mono": false,
+     "align": "left",
+     "position": "center",
+     "widthRatio": 0.63,
+     "top": 226,
+     "tag": "h2",
+     "kind": "heading"
+    },
+    "h1": {
+     "text": "LOGIN",
+     "words": 1,
+     "lines": 1,
+     "size": 30,
+     "font": "Bebas Neue"
+    },
+    "headings": [
+     {
+      "text": "LEARN ENGLISH ONE FILM AT A TIME.",
+      "words": 7,
+      "chars": 33,
+      "lines": 1,
+      "size": 41.5,
+      "vw": 5.4,
+      "font": "Bebas Neue",
+      "weight": 400,
+      "tracking": 0.005,
+      "leading": 0.92,
+      "upper": true,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "center",
+      "widthRatio": 0.63,
+      "top": 226,
+      "tag": "h2",
+      "kind": "heading"
+     },
+     {
+      "text": "KINOCHY",
+      "words": 1,
+      "chars": 7,
+      "lines": 1,
+      "size": 30,
+      "vw": 3.9,
+      "font": "Bebas Neue",
+      "weight": 400,
+      "tracking": 0.04,
+      "leading": 1,
+      "upper": true,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "center",
+      "widthRatio": 0.55,
+      "top": 677,
+      "tag": "span",
+      "kind": "heading"
+     },
+     {
+      "text": "LOGIN",
+      "words": 1,
+      "chars": 5,
+      "lines": 1,
+      "size": 30,
+      "vw": 3.9,
+      "font": "Bebas Neue",
+      "weight": 400,
+      "tracking": 0.01,
+      "leading": 1,
+      "upper": true,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "center",
+      "widthRatio": 0.55,
+      "top": 781,
+      "tag": "h1",
+      "kind": "heading"
+     }
+    ],
+    "headingSummary": {
+     "count": 3,
+     "maxLines": 1,
+     "over2Lines": 0,
+     "statements": 0,
+     "centered": 0,
+     "medianWords": 1,
+     "mixedFontHeadings": 0
+    },
+    "type": {
+     "families": [
+      {
+       "family": "system-ui",
+       "share": 0.85,
+       "mono": false
+      },
+      {
+       "family": "Avenir Next",
+       "share": 0.08,
+       "mono": false
+      },
+      {
+       "family": "Bebas Neue",
+       "share": 0.07,
+       "mono": false
+      }
+     ],
+     "familyCount": 3,
+     "sizes": [
+      8,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      22,
+      30,
+      42
+     ],
+     "sizeCount": 10,
+     "notLoaded": [
+      "Avenir Next"
+     ],
+     "body": {
+      "font": "system-ui",
+      "size": 17,
+      "leading": 1.5,
+      "weight": 400,
+      "tracking": 0,
+      "contrast": 12
+     },
+     "measureChars": 47,
+     "max": {
+      "size": 41.5,
+      "vw": 5.4,
+      "font": "Bebas Neue",
+      "text": "Learn English one film at a time."
+     },
+     "monoShare": 0,
+     "monoProseShare": 0,
+     "monoFamilies": [],
+     "monoSamples": [],
+     "microLabels": 0,
+     "microLabelShare": 0,
+     "microSamples": [],
+     "upperShare": 0.08,
+     "centerShare": 0.04,
+     "smallText": 0
+    },
+    "eyebrows": [],
+    "numbered": [],
+    "color": {
+     "bodyBg": "#0f172a",
+     "bodyBgHsl": {
+      "h": 222,
+      "s": 0.47,
+      "l": 0.11
+     },
+     "dark": true,
+     "sectionBgs": [
+      {
+       "color": "#0b1120",
+       "top": 185,
+       "hsl": {
+        "h": 223,
+        "s": 0.49,
+        "l": 0.08
+       }
+      },
+      {
+       "color": "#131f36",
+       "top": 625,
+       "hsl": {
+        "h": 219,
+        "s": 0.48,
+        "l": 0.14
+       }
+      }
+     ],
+     "textColors": [
+      {
+       "color": "#aebccb",
+       "share": 0.26
+      },
+      {
+       "color": "#c3d0dd",
+       "share": 0.19
+      },
+      {
+       "color": "#f5f7f8",
+       "share": 0.17
+      },
+      {
+       "color": "#8093a8",
+       "share": 0.16
+      },
+      {
+       "color": "#9fb0c2",
+       "share": 0.11
+      }
+     ],
+     "button": {
+      "bg": "#1e293b",
+      "hsl": {
+       "h": 217,
+       "s": 0.33,
+       "l": 0.17
+      },
+      "fg": "#e2e8f0"
+     },
+     "lowContrast": []
+    },
+    "buttons": {
+     "count": 3,
+     "inHero": 2,
+     "radius": 12,
+     "height": 46,
+     "withShadow": 1,
+     "withGradient": 1,
+     "mono": 0,
+     "upper": 0,
+     "heroLabels": [
+      "LANGUAGE English",
+      "Sign up"
+     ]
+    },
+    "surfaces": {
+     "shadowStatic": 0,
+     "shadowOverlay": 1,
+     "shadowSamples": [],
+     "gradients": 0,
+     "scrims": 0,
+     "gradientSamples": [],
+     "gradientText": 0,
+     "hairlines": 1,
+     "hairlineSamples": [
+      "header.topbar 768px"
+     ],
+     "outlinedBoxes": 0,
+     "dashed": 0,
+     "blurred": 1,
+     "roundedBoxes": 0,
+     "boxRadius": 0,
+     "squareMedia": 0,
+     "roundedMedia": 0,
+     "mediaRadius": 0,
+     "textShadow": 0,
+     "cardRows": [
+      {
+       "count": 3,
+       "iconTopped": false,
+       "rounded": false,
+       "top": 625
+      }
+     ]
+    },
+    "heroMedia": [],
+    "nav": {
+     "links": 6,
+     "fixed": true,
+     "height": 185,
+     "floatingPill": false,
+     "blur": true
+    },
+    "fontsLoaded": [
+     "bebas neue",
+     "bebas neue fallback"
+    ]
+   },
+   "consoleErrors": []
+  },
+  {
+   "width": 390,
+   "height": 844,
+   "load": "load",
+   "screens": 2,
+   "filled": [
+    0.99,
+    0.93
+   ],
+   "motion": {
+    "elements": 1,
+    "css": 0,
+    "transitions": 0,
+    "scripted": 1,
+    "videos": 0,
+    "playingVideos": 0
+   },
+   "metrics": {
+    "viewport": {
+     "w": 390,
+     "h": 844
+    },
+    "page": {
+     "height": 1222,
+     "screens": 1.4,
+     "words": 70,
+     "img": 66,
+     "video": 0,
+     "canvas": 0,
+     "svg": 9,
+     "sections": 1,
+     "horizontalOverflow": 0,
+     "overflowCulprits": [],
+     "uiFragments": 0,
+     "uiAbuse": false,
+     "realPictures": 0,
+     "videoCount": 0,
+     "uiPictures": 0,
+     "pictureSamples": [],
+     "blendText": 0,
+     "sideScrollers": 0,
+     "brokenImages": [],
+     "emoji": []
+    },
+    "hero": {
+     "text": "LEARN ENGLISH ONE FILM AT A TIME.",
+     "words": 7,
+     "chars": 33,
+     "lines": 2,
+     "size": 40,
+     "vw": 10.3,
+     "font": "Bebas Neue",
+     "weight": 400,
+     "tracking": 0.005,
+     "leading": 0.92,
+     "upper": true,
+     "italic": false,
+     "mono": false,
+     "align": "left",
+     "position": "center",
+     "widthRatio": 0.9,
+     "top": 142,
+     "tag": "h2",
+     "kind": "heading"
+    },
+    "h1": {
+     "text": "LOGIN",
+     "words": 1,
+     "lines": 1,
+     "size": 30,
+     "font": "Bebas Neue"
+    },
+    "headings": [
+     {
+      "text": "LEARN ENGLISH ONE FILM AT A TIME.",
+      "words": 7,
+      "chars": 33,
+      "lines": 2,
+      "size": 40,
+      "vw": 10.3,
+      "font": "Bebas Neue",
+      "weight": 400,
+      "tracking": 0.005,
+      "leading": 0.92,
+      "upper": true,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "center",
+      "widthRatio": 0.9,
+      "top": 142,
+      "tag": "h2",
+      "kind": "heading"
+     },
+     {
+      "text": "KINOCHY",
+      "words": 1,
+      "chars": 7,
+      "lines": 1,
+      "size": 30,
+      "vw": 7.7,
+      "font": "Bebas Neue",
+      "weight": 400,
+      "tracking": 0.04,
+      "leading": 1,
+      "upper": true,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "center",
+      "widthRatio": 0.75,
+      "top": 398,
+      "tag": "span",
+      "kind": "heading"
+     },
+     {
+      "text": "LOGIN",
+      "words": 1,
+      "chars": 5,
+      "lines": 1,
+      "size": 30,
+      "vw": 7.7,
+      "font": "Bebas Neue",
+      "weight": 400,
+      "tracking": 0.01,
+      "leading": 1,
+      "upper": true,
+      "italic": false,
+      "mono": false,
+      "align": "left",
+      "position": "center",
+      "widthRatio": 0.75,
+      "top": 502,
+      "tag": "h1",
+      "kind": "heading"
+     }
+    ],
+    "headingSummary": {
+     "count": 3,
+     "maxLines": 2,
+     "over2Lines": 0,
+     "statements": 0,
+     "centered": 0,
+     "medianWords": 1,
+     "mixedFontHeadings": 0
+    },
+    "type": {
+     "families": [
+      {
+       "family": "system-ui",
+       "share": 0.83,
+       "mono": false
+      },
+      {
+       "family": "Bebas Neue",
+       "share": 0.11,
+       "mono": false
+      },
+      {
+       "family": "Avenir Next",
+       "share": 0.06,
+       "mono": false
+      }
+     ],
+     "familyCount": 3,
+     "sizes": [
+      8,
+      9,
+      10,
+      13,
+      14,
+      16,
+      17,
+      30,
+      40
+     ],
+     "sizeCount": 9,
+     "notLoaded": [
+      "Avenir Next"
+     ],
+     "body": {
+      "font": "system-ui",
+      "size": 17,
+      "leading": 1.5,
+      "weight": 400,
+      "tracking": 0,
+      "contrast": 12
+     },
+     "measureChars": 41,
+     "max": {
+      "size": 40,
+      "vw": 10.3,
+      "font": "Bebas Neue",
+      "text": "Learn English one film at a time."
+     },
+     "monoShare": 0,
+     "monoProseShare": 0,
+     "monoFamilies": [],
+     "monoSamples": [],
+     "microLabels": 0,
+     "microLabelShare": 0,
+     "microSamples": [],
+     "upperShare": 0.11,
+     "centerShare": 0.07,
+     "smallText": 0
+    },
+    "eyebrows": [],
+    "numbered": [],
+    "color": {
+     "bodyBg": "#0f172a",
+     "bodyBgHsl": {
+      "h": 222,
+      "s": 0.47,
+      "l": 0.11
+     },
+     "dark": true,
+     "sectionBgs": [
+      {
+       "color": "#0b1120",
+       "top": 108,
+       "hsl": {
+        "h": 223,
+        "s": 0.49,
+        "l": 0.08
+       }
+      },
+      {
+       "color": "#080c16",
+       "top": 108,
+       "hsl": {
+        "h": 223,
+        "s": 0.47,
+        "l": 0.06
+       }
+      },
+      {
+       "color": "#131f36",
+       "top": 346,
+       "hsl": {
+        "h": 219,
+        "s": 0.48,
+        "l": 0.14
+       }
+      }
+     ],
+     "textColors": [
+      {
+       "color": "#c3d0dd",
+       "share": 0.31
+      },
+      {
+       "color": "#8093a8",
+       "share": 0.26
+      },
+      {
+       "color": "#9fb0c2",
+       "share": 0.18
+      },
+      {
+       "color": "#f5f7f8",
+       "share": 0.11
+      },
+      {
+       "color": "#73e4e8",
+       "share": 0.06
+      }
+     ],
+     "button": {
+      "bg": "#06b6d4",
+      "hsl": {
+       "h": 189,
+       "s": 0.94,
+       "l": 0.43
+      },
+      "fg": "#05252b"
+     },
+     "lowContrast": []
+    },
+    "buttons": {
+     "count": 1,
+     "inHero": 1,
+     "radius": 0,
+     "height": 52,
+     "withShadow": 0,
+     "withGradient": 0,
+     "mono": 0,
+     "upper": 0,
+     "heroLabels": [
+      "Login"
+     ]
+    },
+    "surfaces": {
+     "shadowStatic": 0,
+     "shadowOverlay": 1,
+     "shadowSamples": [],
+     "gradients": 0,
+     "scrims": 0,
+     "gradientSamples": [],
+     "gradientText": 0,
+     "hairlines": 2,
+     "hairlineSamples": [
+      "header.topbar 390px",
+      "nav.nav-tabs 390px"
+     ],
+     "outlinedBoxes": 0,
+     "dashed": 0,
+     "blurred": 2,
+     "roundedBoxes": 0,
+     "boxRadius": 0,
+     "squareMedia": 0,
+     "roundedMedia": 0,
+     "mediaRadius": 0,
+     "textShadow": 0,
+     "cardRows": [
+      {
+       "count": 3,
+       "iconTopped": false,
+       "rounded": false,
+       "top": 346
+      }
+     ]
+    },
+    "heroMedia": [],
+    "nav": {
+     "links": 5,
+     "fixed": true,
+     "height": 108,
+     "floatingPill": false,
+     "blur": true
+    },
+    "fontsLoaded": [
+     "bebas neue",
+     "bebas neue fallback"
+    ]
+   },
+   "consoleErrors": []
+  }
+ ],
+ "findings": [
+  {
+   "level": "FAIL",
+   "id": "button-fx",
+   "width": 1440,
+   "message": "Buttons with gradient fill and shadow/glow.",
+   "fix": "Flat fill, one colour.",
+   "alsoAt": [
+    768
+   ]
+  },
+  {
+   "level": "WARN",
+   "id": "hairline",
+   "width": 1440,
+   "message": "1 thin rule(s)/divider line(s): header.topbar 1440px",
+   "fix": "Delete. Separate with space, a tone change, or scale. Lines are only for real tables and form fields.",
+   "alsoAt": [
+    768
+   ]
+  },
+  {
+   "level": "WARN",
+   "id": "font-count",
+   "width": 1440,
+   "message": "3 typefaces in use (system-ui, Avenir Next, Bebas Neue).",
+   "fix": "Two at most.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "WARN",
+   "id": "font-fallback",
+   "width": 1440,
+   "message": "Typeface(s) declared but not loaded, so a fallback is rendering: Avenir Next",
+   "fix": "Fix the font URL / family name, or the screenshots you are judging are not the design.",
+   "alsoAt": [
+    768,
+    390
+   ]
+  },
+  {
+   "level": "WARN",
+   "id": "size-count",
+   "width": 1440,
+   "message": "11 different font sizes (8, 12, 13, 14, 15, 16, 19, 22, 30, 40, 68).",
+   "fix": "A page needs about five: display, heading, lead, body, small.",
+   "alsoAt": [
+    768
+   ]
+  },
+  {
+   "level": "WARN",
+   "id": "no-footage",
+   "width": 1440,
+   "message": "No video anywhere on the page.",
+   "fix": "Look for one honest clip with scripts/assets.mjs --video (the place, the material, the process) and use it as a muted loop with a poster frame. Defend its absence only if no clip fits the subject."
+  },
+  {
+   "level": "FAIL",
+   "id": "still-page",
+   "width": 1440,
+   "message": "Only 1 element(s) moved while the page loaded and scrolled.",
+   "fix": "Build the motion layer (SKILL.md step 9, references/motion.md): the signature move, an entrance for the parts of every section, feedback on every control, and one moving picture. Transform and opacity only, with a reduced-motion fallback."
+  },
+  {
+   "level": "FAIL",
+   "id": "hairline",
+   "width": 390,
+   "message": "2 thin rule(s)/divider line(s): header.topbar 390px | nav.nav-tabs 390px",
+   "fix": "Delete. Separate with space, a tone change, or scale. Lines are only for real tables and form fields."
+  },
+  {
+   "level": "WARN",
+   "id": "glass",
+   "width": 390,
+   "message": "2 backdrop-blur surfaces.",
+   "fix": "One blurred sticky bar at most; glass cards are a tell."
+  }
+ ],
+ "images": [
+  {
+   "viewport": "desktop",
+   "width": 1440,
+   "fold": "c:\\Users\\User\\Desktop\\WorkSpace\\Projects\\kinochy\\.taste-skill\\inspect\\desktop-fold.jpg",
+   "pages": [
+    "c:\\Users\\User\\Desktop\\WorkSpace\\Projects\\kinochy\\.taste-skill\\inspect\\desktop-page-01.jpg"
+   ]
+  },
+  {
+   "viewport": "tablet",
+   "width": 768,
+   "fold": "c:\\Users\\User\\Desktop\\WorkSpace\\Projects\\kinochy\\.taste-skill\\inspect\\tablet-fold.jpg",
+   "pages": [
+    "c:\\Users\\User\\Desktop\\WorkSpace\\Projects\\kinochy\\.taste-skill\\inspect\\tablet-page-01.jpg"
+   ]
+  },
+  {
+   "viewport": "mobile",
+   "width": 390,
+   "fold": "c:\\Users\\User\\Desktop\\WorkSpace\\Projects\\kinochy\\.taste-skill\\inspect\\mobile-fold.jpg",
+   "pages": [
+    "c:\\Users\\User\\Desktop\\WorkSpace\\Projects\\kinochy\\.taste-skill\\inspect\\mobile-page-01.jpg"
+   ]
+  }
+ ]
+}

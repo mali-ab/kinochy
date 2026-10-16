@@ -4,7 +4,7 @@ import { useTranslations } from 'use-intl';
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiUpload } from '../api/client';
-import { useCountries, useGenres } from '../api/hooks.jsx';
+import { useGenres } from '../api/hooks.jsx';
 import { adminMovieQuery } from '../api/queries';
 import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
 import { addQualityUpload, cloneMovieForm, formatFileSize, getPerFileProgress, initialMovieForm, movieQualityOptions, movieToForm, range } from './helpers.js';
@@ -18,7 +18,7 @@ export default function AdminMovieEditor({ id = null }) {
   const movieResult = useQuery({ ...adminMovieQuery(id ?? ''), enabled: Boolean(id), retry: false });
   const movie = movieResult.data ?? null;
   const genreCatalog = useGenres();
-  const countries = useCountries();
+  // const countries = useCountries();
   const genres = genreCatalog.length ? genreCatalog : [{ code: 'Drama', tm: 'Drama', en: 'Drama', ru: 'Драма' }];
 
   if (id && movieResult.isPending) return <div className="status">Loading editor...</div>;
