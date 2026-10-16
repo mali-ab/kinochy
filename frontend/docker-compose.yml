@@ -1,0 +1,25 @@
+services:
+  frontend:
+    build:
+      # Context is this folder, so the image builds in full isolation from the
+      # backend/admin and the repo-root npm workspace.
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NODE_IMAGE: node:22-alpine
+        # Bake the API origin only if this container must proxy /api and /media
+        # itself via Next rewrites. Leave empty when an upstream reverse proxy
+        # (e.g. the nginx edge) already handles those paths.
+        API_ORIGIN: ${API_ORIGIN:-}
+        # Optional sub-path deploy; leave empty for "/".
+        NEXT_PUBLIC_BASE_PATH: ${NEXT_PUBLIC_BASE_PATH:-}
+    image: kinochy-frontend
+    container_name: kinochy_frontend
+    restart: unless-stopped
+    environment:
+      # Read by the standalone server.js at runtime.
+      HOSTNAME: 0.0.0.0
+      PORT: 5173
+      NODE_ENV: production
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"

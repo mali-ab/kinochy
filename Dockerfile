@@ -1,6 +1,7 @@
 ARG NODE_IMAGE=node:22-alpine
 ARG DOTNET_SDK_IMAGE=mcr.microsoft.com/dotnet/sdk:10.0
 ARG DOTNET_RUNTIME_IMAGE=mcr.microsoft.com/dotnet/aspnet:10.0
+ARG NGINX_IMAGE=nginx:1.27-alpine
 
 FROM ${NODE_IMAGE} AS frontend-build
 ARG APP_BASE_PATH=/
@@ -19,21 +20,20 @@ FROM ${NODE_IMAGE} AS frontend-runtime
 ARG APP_BASE_PATH=/
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV HOSTNAME=0.0.0.0
+ENV PORT=5173
 ENV APP_BASE_PATH=${APP_BASE_PATH}
 WORKDIR /app
 
-COPY --from=frontend-build /app/package.json /app/package-lock.json ./
-COPY --from=frontend-build /app/node_modules ./node_modules
-COPY --from=frontend-build /app/frontend/package.json ./frontend/package.json
-COPY --from=frontend-build /app/frontend/next.config.ts ./frontend/next.config.ts
-COPY --from=frontend-build /app/frontend/.next ./frontend/.next
+# Run the Next.js standalone server (next.config.ts: output: 'standalone').
+COPY --from=frontend-build /app/frontend/.next/standalone ./
+COPY --from=frontend-build /app/frontend/.next/static ./frontend/.next/static
 COPY --from=frontend-build /app/frontend/public ./frontend/public
 
 EXPOSE 5173
-CMD ["npm", "run", "start", "--workspace", "frontend"]
+CMD ["node", "frontend/server.js"]
 
-# The admin panel is a standalone Vite SPA. It builds with base /admin/ and is
-# served by the nginx edge together with the public site on a single origin.
+# The admin panel is a standalone Vite SPA.
 FROM ${NODE_IMAGE} AS admin-build
 ARG APP_BASE_PATH=/admin/
 ENV APP_BASE_PATH=${APP_BASE_PATH}
@@ -43,6 +43,11 @@ COPY admin/package*.json ./admin/
 RUN npm install --prefix admin --no-audit --no-fund
 COPY admin ./admin
 RUN npm run build --prefix admin
+
+# ---------------------------------------------------------
+# FIX: Re-declare the ARG here so the stage can see it
+# ---------------------------------------------------------
+ARG NGINX_IMAGE=nginx:1.27-alpine
 
 FROM ${NGINX_IMAGE} AS admin-runtime
 COPY admin/nginx.conf /etc/nginx/conf.d/default.conf

@@ -1,6 +1,6 @@
 import { api } from './client';
 import { publicGet, type CacheOptions } from './http';
-import type { AdminIdentity, Genre, Movie, MovieComment, SeriesSeason, SessionUser, TranslateResult, VocabularyEntry } from './types';
+import type { Country, Genre, Movie, MovieComment, SeriesSeason, SessionUser, TranslateResult, VocabularyEntry } from './types';
 
 // --- Public catalog (isomorphic: cached on the server, proxied in the browser) ---
 

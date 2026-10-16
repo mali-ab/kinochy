@@ -796,7 +796,7 @@ export default function MoviePlayer({ movie, subtitles, access }) {
         />
 
 
-        <div className='player-navigations absolute'>
+        <div className='player-navigations absolute w-full z-10 bottom-0'>
           <div className="timeline">
             <input
               type="range"

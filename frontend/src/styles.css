@@ -3211,7 +3211,10 @@ body {
     font-size: 0;
   }
 }
-
+.player-navigations{
+  z-index: 1231;
+  bottom: 0;
+}
 /* Reference-inspired player controls */
 .timeline {
   height: 6px;
