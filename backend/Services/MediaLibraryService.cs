@@ -24,33 +24,58 @@ public sealed partial class MediaLibraryService(IConfiguration configuration)
 
     [GeneratedRegex(@"^(144|240|360|480|720|1080|1440|2160)p$", RegexOptions.IgnoreCase)]
     private static partial Regex QualityName();
+    [GeneratedRegex(@"(?:season|сезон|s)[ ._-]*(?<number>\d{1,3})", RegexOptions.IgnoreCase)]
+    private static partial Regex SeasonName();
+    [GeneratedRegex(@"s(?<season>\d{1,3})[ ._-]*e(?<episode>\d{1,4})|(?:episode|серия|ep|e)[ ._-]*(?<episodeOnly>\d{1,4})", RegexOptions.IgnoreCase)]
+    private static partial Regex EpisodeName();
+
+    public sealed record ImportedEpisode(int SeasonNumber, int EpisodeNumber, string Title, string Playlist,
+        Dictionary<string,string> Subtitles);
+    public sealed record ImportResult(string Playlist, Dictionary<string,string> Subtitles, List<ImportedEpisode> Episodes);
 
     public MediaLibraryScan Scan(string? requestedPath)
     {
         var path = ResolveAllowedPath(requestedPath);
-        var direct = InspectTitle(path);
+        var direct = InspectItem(path);
         List<MediaLibraryItem> items = direct is null
-            ? Directory.EnumerateDirectories(path).Select(InspectTitle).Where(item => item is not null).Cast<MediaLibraryItem>().OrderBy(item => item.Title).ToList()
+            ? Directory.EnumerateDirectories(path).Select(InspectItem).Where(item => item is not null).Cast<MediaLibraryItem>().OrderBy(item => item.Title).ToList()
             : [direct];
         if (items.Count == 0) throw new ApiException("No movie folders with playable quality/stream.m3u8 files were found.", 404);
         return new(path, items);
     }
 
-    public async Task<(string Playlist, Dictionary<string,string> Subtitles)> ImportAsync(string requestedPath, string uploadRoot)
+    public async Task<ImportResult> ImportAsync(string requestedPath, string uploadRoot)
     {
         var source = ResolveAllowedPath(requestedPath);
-        var item = InspectTitle(source) ?? throw new ApiException("The selected folder has no playable quality/stream.m3u8 files.");
+        var item = InspectItem(source) ?? throw new ApiException("The selected folder has no playable movie or episode folders.");
+        if (item.Episodes.Count > 0)
+        {
+            var imported = new List<ImportedEpisode>();
+            foreach (var episode in item.Episodes.OrderBy(value => value.SeasonNumber).ThenBy(value => value.EpisodeNumber))
+            {
+                var media = await ImportPlayableDirectoryAsync(episode.Path, episode.Qualities, uploadRoot);
+                imported.Add(new(episode.SeasonNumber, episode.EpisodeNumber, episode.Title, media.Playlist, media.Subtitles));
+            }
+            var first = imported[0];
+            return new(first.Playlist, first.Subtitles, imported);
+        }
+        var single = await ImportPlayableDirectoryAsync(source, item.Qualities, uploadRoot);
+        return new(single.Playlist, single.Subtitles, []);
+    }
+
+    private async Task<(string Playlist, Dictionary<string,string> Subtitles)> ImportPlayableDirectoryAsync(string source, string[] qualities, string uploadRoot)
+    {
         var directory = Path.Combine(uploadRoot, $"{Guid.NewGuid():N}-library");
         Directory.CreateDirectory(directory);
         try
         {
-            foreach (var quality in item.Qualities)
+            foreach (var quality in qualities)
             {
                 var sourceQuality = Path.Combine(source, quality);
                 Directory.CreateSymbolicLink(Path.Combine(directory, quality.ToLowerInvariant()), sourceQuality);
             }
             var playlist = Path.Combine(directory, "playlist.m3u8");
-            await File.WriteAllTextAsync(playlist, BuildMaster(item.Qualities), Encoding.UTF8);
+            await File.WriteAllTextAsync(playlist, BuildMaster(qualities), Encoding.UTF8);
             var subtitles = new Dictionary<string,string>();
             foreach (var file in Directory.EnumerateFiles(source).Where(IsSubtitle))
             {
@@ -66,6 +91,8 @@ public sealed partial class MediaLibraryService(IConfiguration configuration)
         }
     }
 
+    private MediaLibraryItem? InspectItem(string path) => InspectTitle(path) ?? InspectSeries(path);
+
     private MediaLibraryItem? InspectTitle(string path)
     {
         var qualities = Directory.EnumerateDirectories(path)
@@ -79,7 +106,47 @@ public sealed partial class MediaLibraryService(IConfiguration configuration)
         if (ignored.Length > 0) warnings.Add($"Ignored incomplete qualities: {string.Join(", ", ignored)}");
         if (subtitles.Length == 0) warnings.Add("No EN or RU subtitle file found at the title root.");
         var folder = Path.GetFileName(path);
-        return new(path, SuggestedTitle(folder), TypeFromPath(path), SuggestedYear(folder), qualities, subtitles, warnings.ToArray());
+        return new(path, SuggestedTitle(folder), TypeFromPath(path), SuggestedYear(folder), qualities, subtitles, warnings.ToArray(), []);
+    }
+
+    private MediaLibraryItem? InspectSeries(string path)
+    {
+        if (!TypeFromPath(path).Equals("Series", StringComparison.Ordinal)) return null;
+        var episodes = new List<MediaLibraryEpisode>();
+        foreach (var firstLevel in Directory.EnumerateDirectories(path))
+        {
+            var parsed = ParseEpisode(Path.GetFileName(firstLevel));
+            var directEpisodeNumber = parsed.Episode ?? ParseNumber(Path.GetFileName(firstLevel));
+            if (directEpisodeNumber is not null && InspectTitle(firstLevel) is not null)
+            {
+                AddEpisode(episodes, firstLevel, parsed.Season ?? 1, directEpisodeNumber.Value);
+                continue;
+            }
+            var season = ParseSeason(Path.GetFileName(firstLevel)) ?? ParseNumber(Path.GetFileName(firstLevel));
+            if (season is not null)
+            {
+                var fallbackEpisode = 1;
+                foreach (var episodePath in Directory.EnumerateDirectories(firstLevel).OrderBy(value => value))
+                {
+                    var episodeNumber = ParseEpisode(Path.GetFileName(episodePath)).Episode ?? ParseNumber(Path.GetFileName(episodePath)) ?? fallbackEpisode++;
+                    AddEpisode(episodes, episodePath, season.Value, episodeNumber);
+                }
+                continue;
+            }
+            if (parsed.Episode is not null) AddEpisode(episodes, firstLevel, parsed.Season ?? 1, parsed.Episode.Value);
+        }
+        if (episodes.Count == 0) return null;
+        var duplicates = episodes.GroupBy(value => (value.SeasonNumber, value.EpisodeNumber)).Where(group => group.Count() > 1).ToArray();
+        if (duplicates.Length > 0) throw new ApiException($"Duplicate episode numbers in {Path.GetFileName(path)}: {string.Join(", ", duplicates.Select(group => $"S{group.Key.SeasonNumber}E{group.Key.EpisodeNumber}"))}");
+        var folder = Path.GetFileName(path);
+        return new(path, SuggestedTitle(folder), "Series", SuggestedYear(folder), [], [], [], episodes.OrderBy(value => value.SeasonNumber).ThenBy(value => value.EpisodeNumber).ToList());
+    }
+
+    private void AddEpisode(List<MediaLibraryEpisode> episodes, string path, int season, int episode)
+    {
+        var media = InspectTitle(path);
+        if (media is null) return;
+        episodes.Add(new(path, season, episode, SuggestedEpisodeTitle(Path.GetFileName(path), episode), media.Qualities, media.SubtitleLanguages, media.Warnings));
     }
 
     private string ResolveAllowedPath(string? value)
@@ -142,4 +209,24 @@ public sealed partial class MediaLibraryService(IConfiguration configuration)
     }
     private static string SuggestedTitle(string folder) => Regex.Replace(folder, @"[._](?=\d{4}\b).*", "").Replace('.', ' ').Trim();
     private static int? SuggestedYear(string folder) => int.TryParse(Regex.Match(folder, @"(?<!\d)(?<year>19\d{2}|20\d{2})(?!\d)").Groups["year"].Value, out var year) ? year : null;
+    private static int? ParseSeason(string name)
+    {
+        var match = SeasonName().Match(name);
+        return match.Success && int.TryParse(match.Groups["number"].Value, out var number) && number > 0 ? number : null;
+    }
+    private static (int? Season, int? Episode) ParseEpisode(string name)
+    {
+        var match = EpisodeName().Match(name);
+        if (!match.Success) return (null, null);
+        var episodeText = match.Groups["episode"].Success ? match.Groups["episode"].Value : match.Groups["episodeOnly"].Value;
+        var season = int.TryParse(match.Groups["season"].Value, out var seasonNumber) && seasonNumber > 0 ? seasonNumber : (int?)null;
+        var episode = int.TryParse(episodeText, out var episodeNumber) && episodeNumber > 0 ? episodeNumber : (int?)null;
+        return (season, episode);
+    }
+    private static int? ParseNumber(string name) => int.TryParse(name.Trim(), out var number) && number > 0 ? number : null;
+    private static string SuggestedEpisodeTitle(string folder, int episode)
+    {
+        var title = EpisodeName().Replace(folder, "").Trim(' ', '.', '_', '-');
+        return string.IsNullOrWhiteSpace(title) ? $"Episode {episode}" : title.Replace('.', ' ');
+    }
 }

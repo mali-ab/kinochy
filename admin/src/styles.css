@@ -2085,6 +2085,8 @@ a:visited {
 .media-library-results strong { color: #f8fafc; }
 .media-library-results small { color: #94a3b8; }
 .media-library-results em { color: #fbbf24; font-size: 10px; font-style: normal; }
+.media-library-episodes { display: flex !important; flex-wrap: wrap; gap: 5px !important; margin-top: 5px; }
+.media-library-episodes i { padding: 4px 6px; border-radius: 6px; color: #a5f3fc; background: rgba(6,182,212,.1); font-size: 9px; font-style: normal; font-weight: 800; }
 .source-note { margin-top: -14px; }
 .admin-form .file-box, .hls-file-box { min-height: 96px; border-radius: 12px; background: #1c2529; }
 .admin-form .file-box:hover, .hls-file-box:hover { border-color: rgba(41,183,232,.65); }

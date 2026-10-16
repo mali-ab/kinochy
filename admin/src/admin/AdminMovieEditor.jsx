@@ -22,7 +22,7 @@ export default function AdminMovieEditor({ id = null }) {
   const movieResult = useQuery({ ...adminMovieQuery(id ?? ''), enabled: Boolean(id), retry: false });
   const movie = movieResult.data ?? null;
   const genreCatalog = useGenres();
-  const countries = useCountries();
+  const countryOptions = useCountries();
   const genres = genreCatalog.length ? genreCatalog : [{ code: 'Drama', tm: 'Drama', en: 'Drama', ru: 'Драма' }];
 
   if (id && movieResult.isPending) return <div className="status">Loading editor...</div>;
@@ -31,7 +31,7 @@ export default function AdminMovieEditor({ id = null }) {
       movie={movie}
       initialType={initialType}
       genres={genres}
-      countries={countries}
+      countryOptions={countryOptions}
       onCancel={() => navigate(movie ? `/admin/movies/${movie.id}` : '/admin')}
       onSaved={(saved) => {
         queryClient.invalidateQueries({ queryKey: ['movies'] });
@@ -43,7 +43,7 @@ export default function AdminMovieEditor({ id = null }) {
   );
 }
 
-function MovieEditor({ movie, initialType, genres, countries, onCancel, onSaved }) {
+function MovieEditor({ movie, initialType, genres, countryOptions = [], onCancel, onSaved }) {
   const [form, setForm] = useState(() => cloneMovieForm(movie ? movieToForm(movie) : { ...initialMovieForm, type: initialType }));
   const [sourceType, setSourceType] = useState(movie?.streaming?.hls ? 'hls' : 'video');
   const [files, setFiles] = useState({});
@@ -218,7 +218,7 @@ function MovieEditor({ movie, initialType, genres, countries, onCancel, onSaved 
         <label>{t('admin_title_label')}<input name="title" required value={form.title} onChange={updateField} /></label>
         <label>{t('admin_original_title')}<input name="originalTitle" value={form.originalTitle} onChange={updateField} /></label>
         <label>{t('admin_year')}<input name="year" type="number" inputMode="numeric" min="1888" max={new Date().getFullYear() + 5} step="1" required value={form.year} onChange={updateField} /></label>
-        <label>{t('admin_country')}<select className="multi-select" multiple value={form.countries} onChange={updateCountries}>{countries.map((country) => <option key={country.code} value={country.name}>{country.name}</option>)}</select></label>
+        <label>{t('admin_country')}<select className="multi-select" multiple value={form.countries} onChange={updateCountries}>{countryOptions.map((country) => <option key={country.code} value={country.name}>{country.name}</option>)}</select></label>
         <label className="wide">{t('admin_genres')}<div className="genre-chips">{genres.map((genre) => <button type="button" key={genre.code} className={form.genres.includes(genre.code) ? 'active' : ''} onClick={() => toggleGenre(genre.code)}>{translateGenre(locale, genre.code, genres)}</button>)}</div></label>
         <label>{t('admin_type')}<select name="type" value={form.type} onChange={updateField}><option value="Movie">{t('movie_type_movie')}</option><option value="Series">{t('movie_type_series')}</option><option value="Cartoon">{t('movie_type_cartoon')}</option></select></label>
         <label>{t('admin_duration')}<div className="duration-picker"><select name="durationHours" value={form.durationHours} onChange={updateField}>{range(0, 6).map((hour) => <option key={hour} value={hour}>{hour} h</option>)}</select><select name="durationMinutes" value={form.durationMinutes} onChange={updateField}>{range(0, 59).map((minute) => <option key={minute} value={minute}>{minute} min</option>)}</select></div></label>
@@ -235,8 +235,8 @@ function MovieEditor({ movie, initialType, genres, countries, onCancel, onSaved 
       </div>
       {sourceType === 'library' ? <div className="media-library-import">
         <div className="media-library-path"><FolderSearch size={20} /><input value={libraryPath} onChange={(event) => setLibraryPath(event.target.value)} placeholder="/media/user/Новый том/kinochy/films" /><button type="button" onClick={inspectLibrary} disabled={scanning}>{scanning ? 'Scanning…' : 'Scan folder'}</button></div>
-        <p>The backend reads this server directory directly. It detects complete <code>quality/stream.m3u8</code> folders and root EN/RU subtitles; movie segments are not uploaded or copied.</p>
-        {libraryScan?.items?.length ? <div className="media-library-results">{libraryScan.items.map((item) => <button type="button" key={item.path} className={serverMediaPath === item.path ? 'selected' : ''} onClick={() => chooseLibraryItem(item)}><span className="media-library-check">{serverMediaPath === item.path ? <Check size={16} /> : <Film size={16} />}</span><span><strong>{item.title}{item.year ? ` (${item.year})` : ''}</strong><small>{item.type} · {item.qualities.join(', ')} · subtitles: {item.subtitleLanguages.join(', ') || 'none'}</small>{item.warnings.map((warning) => <em key={warning}>{warning}</em>)}</span></button>)}</div> : null}
+        <p>The backend reads this server directory directly. Movies use <code>Title/quality/stream.m3u8</code>. Series use <code>Series/Season 1/Episode 1/quality/stream.m3u8</code>. Put EN/RU subtitles inside each movie or episode folder.</p>
+        {libraryScan?.items?.length ? <div className="media-library-results">{libraryScan.items.map((item) => <button type="button" key={item.path} className={serverMediaPath === item.path ? 'selected' : ''} onClick={() => chooseLibraryItem(item)}><span className="media-library-check">{serverMediaPath === item.path ? <Check size={16} /> : <Film size={16} />}</span><span><strong>{item.title}{item.year ? ` (${item.year})` : ''}</strong><small>{item.type}{item.episodes?.length ? ` · ${item.episodes.length} episodes · ${new Set(item.episodes.map((episode) => episode.seasonNumber)).size} seasons` : ` · ${item.qualities.join(', ')} · subtitles: ${item.subtitleLanguages.join(', ') || 'none'}`}</small>{item.episodes?.length ? <span className="media-library-episodes">{item.episodes.map((episode) => <i key={`${episode.seasonNumber}-${episode.episodeNumber}`}>S{episode.seasonNumber} E{episode.episodeNumber} · {episode.qualities.join(', ')}</i>)}</span> : null}{item.warnings.map((warning) => <em key={warning}>{warning}</em>)}</span></button>)}</div> : null}
       </div> : null}
       {sourceType === 'hls' ? <p className="source-note bundle-note"><strong>Recommended ZIP structure:</strong> master.m3u8 at the root, with quality folders. A single containing folder is also accepted. Keep subtitles in their own ZIP below.</p> : sourceType === 'video' ? <p className="source-note">MP4 with browser-compatible codecs is recommended. The server streams the file as uploaded; it does not transcode it.</p> : null}
       {sourceType !== 'library' ? <div className="upload-grid">

@@ -41,8 +41,10 @@ public sealed record AdminComment(Guid Id, Guid MovieId, string MovieTitle, stri
     Guid UserId, string Username, string Email, string Body, DateTime CreatedAt);
 public sealed record AdminCommentPage(List<AdminComment> Items, int Page, int PageSize, long Total);
 public sealed record MediaLibraryPathRequest(string Path);
+public sealed record MediaLibraryEpisode(string Path, int SeasonNumber, int EpisodeNumber, string Title,
+    string[] Qualities, string[] SubtitleLanguages, string[] Warnings);
 public sealed record MediaLibraryItem(string Path, string Title, string Type, int? Year, string[] Qualities,
-    string[] SubtitleLanguages, string[] Warnings);
+    string[] SubtitleLanguages, string[] Warnings, List<MediaLibraryEpisode> Episodes);
 public sealed record MediaLibraryScan(string Root, List<MediaLibraryItem> Items);
 public sealed record SeriesEpisodeRequest(Guid MovieId, int SeasonNumber, int EpisodeNumber, string? Title);
 public sealed record SeriesEpisode(Guid Id, Guid MovieId, int EpisodeNumber, string Title, string Slug, string? CoverUrl, string? Duration);
