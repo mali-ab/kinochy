@@ -78,7 +78,7 @@ services:
       - app
       - frontend
     ports:
-      - "80:80"
+      - "4000:80"
 
 volumes:
   postgres_data:
