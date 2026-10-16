@@ -3,7 +3,6 @@
 import { Eye, EyeOff, Lock, Mail, User } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import filmStrip from '../../public/film-strip.jpg';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslations } from 'next-intl';
@@ -525,7 +524,7 @@ export default function AuthView({ mode = 'login', embedded = false }) {
               <div className="auth-ticket-stub">
                 <Image
                   className="auth-filmstrip"
-                  src={filmStrip}
+                  src="/film-strip.jpg"
                   alt="A strip of 35mm motion-picture film"
                   width={1024}
                   height={265}

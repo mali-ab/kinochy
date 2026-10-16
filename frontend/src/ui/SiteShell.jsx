@@ -9,7 +9,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { BookOpen, Check, ChevronDown, Clapperboard, Crown, Film, Globe2, Heart, LayoutDashboard, LoaderCircle, LogOut, Search, Tv } from 'lucide-react';
 import { logout as logoutUser } from '../api/endpoints';
 import { catalogUrl, categoryKeys, categoryLabelKey, homeUrl, parsePathname, withLocale } from '../catalog/urls';
-import logo from '../../public/kinochy_favicon.png';
 import { LocaleProvider, useLocale } from './locale.jsx';
 import { SessionProvider, useSession } from './session.jsx';
 
@@ -89,7 +88,7 @@ function SiteChrome({ children }) {
       <header className="topbar">
         <Link href={homeUrl(locale)} className="brand" aria-label="Kinochy home">
           <span className="brand-mark">
-            <Image src={logo} alt="" width={32} height={32} priority />
+            <Image src="/kinochy_favicon.png" alt="" width={32} height={32} priority />
           </span>
           <span>Kinochy</span>
         </Link>
