@@ -4,6 +4,7 @@ import * as endpoints from './endpoints';
 export const queryKeys = {
   movies: (search = '') => ['movies', search],
   genres: ['genres'],
+  countries: ['countries'],
   movie: (slug) => ['movie', slug],
   recommendations: (slug) => ['movies', slug, 'recommendations'],
   seasons: (slug) => ['movies', slug, 'seasons'],
@@ -14,7 +15,8 @@ export const queryKeys = {
   adminSession: ['auth', 'me'],
   adminMovie: (id) => ['admin', 'movies', id],
   adminUser: (id) => ['admin', 'users', id],
-  adminUsers: ['admin', 'users']
+  adminUsers: ['admin', 'users'],
+  adminComments: (filters) => ['admin', 'comments', filters]
 };
 
 export function moviesQuery(search = '') {
@@ -23,6 +25,10 @@ export function moviesQuery(search = '') {
 
 export function genresQuery() {
   return queryOptions({ queryKey: queryKeys.genres, queryFn: () => endpoints.getGenres(), staleTime: 10 * 60_000 });
+}
+
+export function countriesQuery() {
+  return queryOptions({ queryKey: queryKeys.countries, queryFn: () => endpoints.getCountries(), staleTime: 24 * 60 * 60_000 });
 }
 
 export function movieQuery(slug) {
@@ -55,4 +61,12 @@ export function adminUserQuery(id) {
 
 export function adminUsersQuery() {
   return queryOptions({ queryKey: queryKeys.adminUsers, queryFn: () => endpoints.getAdminUsers(), staleTime: 0 });
+}
+
+export function adminCommentsQuery(filters) {
+  return queryOptions({
+    queryKey: queryKeys.adminComments(filters),
+    queryFn: () => endpoints.getAdminComments(filters),
+    staleTime: 15_000
+  });
 }

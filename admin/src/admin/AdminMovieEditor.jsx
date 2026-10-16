@@ -1,9 +1,10 @@
-import { Film, Image as ImageIcon, Plus, Save, Upload } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Check, Film, FolderSearch, Image as ImageIcon, Plus, Save, Upload } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslations } from 'use-intl';
 import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiUpload } from '../api/client';
+import { scanMediaLibrary } from '../api/endpoints';
 import { useGenres } from '../api/hooks.jsx';
 import { adminMovieQuery } from '../api/queries';
 import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
@@ -14,6 +15,9 @@ import { addQualityUpload, cloneMovieForm, formatFileSize, getPerFileProgress, i
  */
 export default function AdminMovieEditor({ id = null }) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedType = searchParams.get('type');
+  const initialType = ['Movie', 'Series', 'Cartoon'].includes(requestedType) ? requestedType : 'Movie';
   const queryClient = useQueryClient();
   const movieResult = useQuery({ ...adminMovieQuery(id ?? ''), enabled: Boolean(id), retry: false });
   const movie = movieResult.data ?? null;
@@ -25,7 +29,9 @@ export default function AdminMovieEditor({ id = null }) {
   return (
     <MovieEditor
       movie={movie}
+      initialType={initialType}
       genres={genres}
+      countries={countries}
       onCancel={() => navigate(movie ? `/admin/movies/${movie.id}` : '/admin')}
       onSaved={(saved) => {
         queryClient.invalidateQueries({ queryKey: ['movies'] });
@@ -37,12 +43,16 @@ export default function AdminMovieEditor({ id = null }) {
   );
 }
 
-function MovieEditor({ movie, genres, countries, onCancel, onSaved }) {
-  const [form, setForm] = useState(() => cloneMovieForm(movie ? movieToForm(movie) : initialMovieForm));
+function MovieEditor({ movie, initialType, genres, countries, onCancel, onSaved }) {
+  const [form, setForm] = useState(() => cloneMovieForm(movie ? movieToForm(movie) : { ...initialMovieForm, type: initialType }));
   const [sourceType, setSourceType] = useState(movie?.streaming?.hls ? 'hls' : 'video');
   const [files, setFiles] = useState({});
   const [hlsFiles, setHlsFiles] = useState([]);
   const [qualityUploads, setQualityUploads] = useState(() => (movie?.streaming?.qualities || []).map((quality) => ({ id: `saved-${quality}`, quality, file: null, existing: true })));
+  const [libraryPath, setLibraryPath] = useState(() => `/media/user/Новый том/kinochy/${initialType === 'Cartoon' ? 'cartoons' : initialType === 'Series' ? 'serials' : 'films'}`);
+  const [libraryScan, setLibraryScan] = useState(null);
+  const [serverMediaPath, setServerMediaPath] = useState('');
+  const [scanning, setScanning] = useState(false);
   const [coverPreview, setCoverPreview] = useState(movie?.coverUrl || '');
   const [busy, setBusy] = useState(false);
   const [uploadStatus, setUploadStatus] = useState({ phase: 'idle', percent: 0 });
@@ -113,6 +123,8 @@ function MovieEditor({ movie, genres, countries, onCancel, onSaved }) {
     setFiles((value) => ({ ...value, video: null }));
     setHlsFiles([]);
     setQualityUploads([]);
+    setServerMediaPath('');
+    setLibraryScan(null);
     setProgress({});
     setError('');
   }
@@ -125,7 +137,8 @@ function MovieEditor({ movie, genres, countries, onCancel, onSaved }) {
     setProgress({});
     const missingFiles = [];
     const selectedQualityUploads = qualityUploads.filter((item) => item.file);
-    if (!files.video && selectedQualityUploads.length === 0 && (!currentStatus.video || Boolean(movie?.streaming?.hls) !== (sourceType === 'hls'))) missingFiles.push(sourceType === 'hls' ? 'HLS ZIP, M3U8 playlist, or quality ZIP' : t('admin_movie_file'));
+    if (sourceType === 'library' && !serverMediaPath) missingFiles.push('a movie folder from the media library');
+    if (sourceType !== 'library' && !files.video && selectedQualityUploads.length === 0 && (!currentStatus.video || Boolean(movie?.streaming?.hls) !== (sourceType === 'hls'))) missingFiles.push(sourceType === 'hls' ? 'HLS ZIP, M3U8 playlist, or quality ZIP' : t('admin_movie_file'));
     if (sourceType === 'hls' && files.video && !files.video.name.toLowerCase().endsWith('.zip') && hlsFiles.length === 0) missingFiles.push('HLS segment files');
     if (missingFiles.length) {
       setBusy(false);
@@ -141,6 +154,7 @@ function MovieEditor({ movie, genres, countries, onCancel, onSaved }) {
       body.append(key, key === 'genres' ? JSON.stringify(value) : value);
     });
     Object.entries(files).forEach(([key, file]) => file && body.append(key, file));
+    if (sourceType === 'library') body.append('serverMediaPath', serverMediaPath);
     if (sourceType === 'hls' && !files.video?.name.toLowerCase().endsWith('.zip')) hlsFiles.forEach((file) => body.append('hlsFiles', file));
     selectedQualityUploads.forEach((item) => body.append(`quality_${item.quality}`, item.file));
 
@@ -168,6 +182,31 @@ function MovieEditor({ movie, genres, countries, onCancel, onSaved }) {
   const currentSourceMatches = Boolean(movie?.streaming?.hls) === (sourceType === 'hls');
   const hlsSize = hlsFiles.reduce((total, file) => total + file.size, 0);
 
+  async function inspectLibrary() {
+    setScanning(true);
+    setError('');
+    setServerMediaPath('');
+    try {
+      setLibraryScan(await scanMediaLibrary(libraryPath));
+    } catch (err) {
+      setLibraryScan(null);
+      setError(err.message);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  function chooseLibraryItem(item) {
+    setServerMediaPath(item.path);
+    setForm((value) => ({
+      ...value,
+      title: item.title,
+      originalTitle: item.title,
+      year: item.year ? String(item.year) : value.year,
+      type: item.type
+    }));
+  }
+
   return (
     <form className="admin-form" onSubmit={submit}>
       <div className="admin-list-head admin-editor-heading">
@@ -192,12 +231,18 @@ function MovieEditor({ movie, genres, countries, onCancel, onSaved }) {
       <div className="source-switch" role="group" aria-label="Playback source">
         <button type="button" className={sourceType === 'video' ? 'active' : ''} onClick={() => changeSource('video')} aria-pressed={sourceType === 'video'}><Film size={18} /><span><strong>Video file</strong><small>MP4, WebM or MKV</small></span></button>
         <button type="button" className={sourceType === 'hls' ? 'active' : ''} onClick={() => changeSource('hls')} aria-pressed={sourceType === 'hls'}><Upload size={18} /><span><strong>HLS bundle</strong><small>ZIP or M3U8 + segments</small></span></button>
+        <button type="button" className={sourceType === 'library' ? 'active' : ''} onClick={() => changeSource('library')} aria-pressed={sourceType === 'library'}><FolderSearch size={18} /><span><strong>Server folder</strong><small>Import converted HLS instantly</small></span></button>
       </div>
-      {sourceType === 'hls' ? <p className="source-note bundle-note"><strong>Recommended ZIP structure:</strong> master.m3u8 at the root, with v0, v1 and v2 rendition folders. A single containing folder is also accepted. Keep subtitles in their own ZIP below.</p> : <p className="source-note">MP4 with browser-compatible codecs is recommended. The server streams the file as uploaded; it does not transcode it.</p>}
-      <div className="upload-grid">
+      {sourceType === 'library' ? <div className="media-library-import">
+        <div className="media-library-path"><FolderSearch size={20} /><input value={libraryPath} onChange={(event) => setLibraryPath(event.target.value)} placeholder="/media/user/Новый том/kinochy/films" /><button type="button" onClick={inspectLibrary} disabled={scanning}>{scanning ? 'Scanning…' : 'Scan folder'}</button></div>
+        <p>The backend reads this server directory directly. It detects complete <code>quality/stream.m3u8</code> folders and root EN/RU subtitles; movie segments are not uploaded or copied.</p>
+        {libraryScan?.items?.length ? <div className="media-library-results">{libraryScan.items.map((item) => <button type="button" key={item.path} className={serverMediaPath === item.path ? 'selected' : ''} onClick={() => chooseLibraryItem(item)}><span className="media-library-check">{serverMediaPath === item.path ? <Check size={16} /> : <Film size={16} />}</span><span><strong>{item.title}{item.year ? ` (${item.year})` : ''}</strong><small>{item.type} · {item.qualities.join(', ')} · subtitles: {item.subtitleLanguages.join(', ') || 'none'}</small>{item.warnings.map((warning) => <em key={warning}>{warning}</em>)}</span></button>)}</div> : null}
+      </div> : null}
+      {sourceType === 'hls' ? <p className="source-note bundle-note"><strong>Recommended ZIP structure:</strong> master.m3u8 at the root, with quality folders. A single containing folder is also accepted. Keep subtitles in their own ZIP below.</p> : sourceType === 'video' ? <p className="source-note">MP4 with browser-compatible codecs is recommended. The server streams the file as uploaded; it does not transcode it.</p> : null}
+      {sourceType !== 'library' ? <div className="upload-grid">
         <FileBox icon={<Film />} name="video" label={sourceType === 'hls' ? 'HLS ZIP or main M3U8' : t('admin_movie_file')} accept={sourceType === 'hls' ? '.zip,.m3u8,application/zip,application/vnd.apple.mpegurl' : 'video/mp4,video/webm,video/x-matroska,.mp4,.webm,.mkv'} required={!currentStatus.video || !currentSourceMatches} file={files.video} current={currentSourceMatches ? currentFiles.video : null} progress={progress.video} onChange={updateFile} onRemove={() => removeFile('video')} />
         {sourceType === 'hls' && !files.video?.name.toLowerCase().endsWith('.zip') ? <div className="hls-file-box"><label htmlFor="hls-files"><Upload size={22} /><span><strong>HLS media files</strong><small>{hlsFiles.length ? `${hlsFiles.length} files · ${formatFileSize(hlsSize)}` : 'Choose all segments and companion playlists'}</small></span></label><input id="hls-files" type="file" multiple accept=".ts,.m4s,.mp4,.aac,.mp3,.vtt,.key,.m3u8" onChange={(event) => { setHlsFiles(Array.from(event.target.files)); event.target.value = ''; }} />{hlsFiles.length ? <div className="hls-file-summary"><span>{hlsFiles.slice(0, 3).map((file) => file.name).join(' · ')}{hlsFiles.length > 3 ? ` · +${hlsFiles.length - 3} more` : ''}</span><button type="button" onClick={() => setHlsFiles([])}>Clear</button></div> : null}{typeof progress.hlsFiles === 'number' && progress.hlsFiles > 0 ? <Progress value={progress.hlsFiles} /> : null}</div> : null}
-      </div>
+      </div> : null}
       {sourceType === 'hls' ? <div className="quality-upload-panel">
         <div className="quality-upload-head"><div><strong>Separate quality ZIPs</strong><small>Add one ZIP per resolution. Each ZIP must contain one playable M3U8 playlist and all of its segments.</small></div><button type="button" disabled={qualityUploads.length >= movieQualityOptions.length} onClick={() => { setFiles((value) => ({ ...value, video: null })); setHlsFiles([]); addQualityUpload(setQualityUploads, qualityUploads); }}><Plus size={16} /> Add quality</button></div>
         {qualityUploads.length ? <div className="quality-upload-list">{qualityUploads.map((item) => <div className="quality-upload-row" key={item.id}>

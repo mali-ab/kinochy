@@ -1,4 +1,4 @@
-import { ArrowLeft, Film, LogOut, Users } from 'lucide-react';
+import { Clapperboard, Film, LogOut, MessageSquareText, MonitorPlay, Users } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslations } from 'use-intl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -34,7 +34,7 @@ function AdminGate({ children }) {
   }
 
   if (checking) return <div className="status">{t('admin_checking')}</div>;
-  if (!admin) return <div className="status">{t('admin_checking')}</div>;
+  if (!admin) return <AdminLogin onLogin={setAdmin} />;
 
   return (
     <ConfirmProvider>
@@ -49,9 +49,8 @@ function AdminChrome({ admin, onLogout, children }) {
   const t = useTranslations();
   const { requestConfirm } = useConfirm();
   const { pathname } = useLocation();
-  const siteHref = import.meta.env.VITE_SITE_URL || '/';
-  const moviesActive = pathname === '/admin' || pathname.startsWith('/admin/movies');
   const usersActive = pathname.startsWith('/admin/users');
+  const commentsActive = pathname.startsWith('/admin/comments');
 
   async function logout() {
     await adminLogout();
@@ -71,7 +70,6 @@ function AdminChrome({ admin, onLogout, children }) {
           </span>
         </Link>
         <div className="admin-head-actions">
-          <a className="admin-back-link" href={siteHref}><ArrowLeft size={17} /> {t('nav_back_to_site')}</a>
           <button
             onClick={() =>
               requestConfirm({
@@ -88,11 +86,20 @@ function AdminChrome({ admin, onLogout, children }) {
       </div>
 
       <div className="admin-tabs">
-        <Link className={moviesActive ? 'active' : ''} to="/admin">
-          <Film size={18} /><span>Movies<small>Manage the catalog</small></span>
+        <Link className={pathname === '/admin/films' ? 'active' : ''} to="/admin/films">
+          <Film size={18} /><span>Films<small>Feature movies</small></span>
+        </Link>
+        <Link className={pathname === '/admin/series' ? 'active' : ''} to="/admin/series">
+          <MonitorPlay size={18} /><span>Serials<small>Seasons and episodes</small></span>
+        </Link>
+        <Link className={pathname === '/admin/cartoons' ? 'active' : ''} to="/admin/cartoons">
+          <Clapperboard size={18} /><span>Cartoons<small>Animated titles</small></span>
         </Link>
         <Link className={usersActive ? 'active' : ''} to="/admin/users">
           <Users size={18} /><span>Users<small>Accounts and access</small></span>
+        </Link>
+        <Link className={commentsActive ? 'active' : ''} to="/admin/comments">
+          <MessageSquareText size={18} /><span>Comments<small>Review discussions</small></span>
         </Link>
       </div>
 

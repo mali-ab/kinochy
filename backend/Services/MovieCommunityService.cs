@@ -97,4 +97,45 @@ public sealed class MovieCommunityService(Database database)
             ("id", commentId), ("movie", movieId), ("user", userId));
         if (await command.ExecuteNonQueryAsync() == 0) throw new ApiException("Comment not found", 404);
     }
+
+    /// <summary>
+    /// Returns a bounded page for the admin moderation queue. Filtering stays in
+    /// PostgreSQL so large comment tables are never loaded into application memory.
+    /// </summary>
+    public async Task<AdminCommentPage> AdminCommentsAsync(int page, int pageSize, string? search, Guid? movieId)
+    {
+        page=Math.Max(1,page);
+        pageSize=Math.Clamp(pageSize,1,100);
+        var term=search?.Trim()??"";
+        if(term.Length>100)throw new ApiException("Comment search is limited to 100 characters.");
+        var selectedMovie=movieId??Guid.Empty;
+        var filter="WHERE (@movie='00000000-0000-0000-0000-000000000000'::uuid OR c.movie_id=@movie) AND (@search='' OR c.body ILIKE @pattern OR u.username ILIKE @pattern OR u.email ILIKE @pattern OR m.title ILIKE @pattern)";
+
+        await using var connection=await database.OpenAsync();
+        await using var countCommand=connection.Command($"SELECT count(*) FROM movie_comments c JOIN users u ON u.id=c.user_id JOIN movies m ON m.id=c.movie_id {filter}",
+            ("movie",selectedMovie),("search",term),("pattern",$"%{term}%"));
+        var total=(long)(await countCommand.ExecuteScalarAsync())!;
+
+        await using var command=connection.Command($"""
+            SELECT c.id,c.movie_id,m.title,m.slug,c.user_id,u.username,u.email,c.body,c.created_at
+            FROM movie_comments c
+            JOIN users u ON u.id=c.user_id
+            JOIN movies m ON m.id=c.movie_id
+            {filter}
+            ORDER BY c.created_at DESC,c.id DESC
+            LIMIT @limit OFFSET @offset
+            """,("movie",selectedMovie),("search",term),("pattern",$"%{term}%"),("limit",pageSize),("offset",(long)(page-1)*pageSize));
+        await using var reader=await command.ExecuteReaderAsync();
+        var items=new List<AdminComment>();
+        while(await reader.ReadAsync())items.Add(new(reader.GetGuid(0),reader.GetGuid(1),reader.GetString(2),reader.GetString(3),
+            reader.GetGuid(4),reader.GetString(5),reader.GetString(6),reader.GetString(7),reader.GetDateTime(8)));
+        return new(items,page,pageSize,total);
+    }
+
+    public async Task RemoveCommentAsAdminAsync(Guid commentId)
+    {
+        await using var connection=await database.OpenAsync();
+        await using var command=connection.Command("DELETE FROM movie_comments WHERE id=@id",("id",commentId));
+        if(await command.ExecuteNonQueryAsync()==0)throw new ApiException("Comment not found",404);
+    }
 }

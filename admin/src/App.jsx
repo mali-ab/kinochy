@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Outlet, Route, Routes, useParams } from 'react
 import AdminMovieDetail from './admin/AdminMovieDetail.jsx';
 import AdminMovieEditor from './admin/AdminMovieEditor.jsx';
 import AdminMoviesList from './admin/AdminMoviesList.jsx';
+import AdminComments from './admin/AdminComments.jsx';
 import AdminShell from './admin/AdminShell.jsx';
 import AdminUserDetail from './admin/AdminUserDetail.jsx';
 import AdminUsersList from './admin/AdminUsersList.jsx';
@@ -20,14 +21,18 @@ export default function App() {
             </AdminShell>
           }
         >
-          <Route index element={<AdminMoviesList />} />
+          <Route index element={<Navigate to="films" replace />} />
+          <Route path="films" element={<AdminMoviesList type="Movie" />} />
+          <Route path="series" element={<AdminMoviesList type="Series" />} />
+          <Route path="cartoons" element={<AdminMoviesList type="Cartoon" />} />
           <Route path="movies/new" element={<AdminMovieEditor />} />
           <Route path="movies/:id" element={<MovieDetailRoute />} />
           <Route path="movies/:id/edit" element={<MovieEditorRoute />} />
           <Route path="users" element={<AdminUsersList />} />
           <Route path="users/new" element={<AdminUserDetail mode="add" />} />
           <Route path="users/:id" element={<UserDetailRoute />} />
-          <Route path="*" element={<Navigate to="/admin" replace />} />
+          <Route path="comments" element={<AdminComments />} />
+          <Route path="*" element={<Navigate to="/admin/films" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>

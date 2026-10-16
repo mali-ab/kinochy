@@ -11,6 +11,10 @@ export function getGenres(options) {
   return publicGet('/api/genres', options);
 }
 
+export function getCountries(options) {
+  return publicGet('/api/countries', options);
+}
+
 export function getMovie(slug, options) {
   return publicGet(`/api/movies/${encodeURIComponent(slug)}`, options);
 }
@@ -42,7 +46,7 @@ export function getCurrentUser() {
 }
 
 export function getCurrentAdmin() {
-  return api('/api/auth/me').then((data) => data.admin ?? null);
+  return getCurrentUser().then((user) => user?.role?.toLowerCase() === 'admin' ? user : null);
 }
 
 export function login(payload) {
@@ -55,12 +59,17 @@ export function logout() {
 
 // --- Admin (browser-only) ---
 
-export function adminLogin(payload) {
-  return api('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
+export async function adminLogin(payload) {
+  const data = await api('/api/users/login', { method: 'POST', body: JSON.stringify(payload) });
+  if (data.user?.role?.toLowerCase() !== 'admin') {
+    await api('/api/users/logout', { method: 'POST', body: JSON.stringify({}) });
+    throw new Error('Administrator account required');
+  }
+  return { admin: data.user };
 }
 
 export function adminLogout() {
-  return api('/api/auth/logout', { method: 'POST', body: JSON.stringify({}) });
+  return api('/api/users/logout', { method: 'POST', body: JSON.stringify({}) });
 }
 
 export function getAdminMovie(id) {
@@ -97,4 +106,19 @@ export function addEpisode(seriesId, payload) {
 
 export function removeEpisode(seriesId, episodeId) {
   return api(`/api/admin/series/${seriesId}/episodes/${episodeId}`, { method: 'DELETE' });
+}
+
+export function getAdminComments({ page = 1, pageSize = 25, search = '', movieId = '' } = {}) {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (search) params.set('search', search);
+  if (movieId) params.set('movieId', movieId);
+  return api(`/api/admin/comments?${params}`);
+}
+
+export function deleteAdminComment(id) {
+  return api(`/api/admin/comments/${id}`, { method: 'DELETE' });
+}
+
+export function scanMediaLibrary(path) {
+  return api('/api/admin/media-library/scan', { method: 'POST', body: JSON.stringify({ path }) });
 }

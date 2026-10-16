@@ -181,5 +181,7 @@ CREATE TABLE IF NOT EXISTS movie_comments (
 );
 
 CREATE INDEX IF NOT EXISTS movie_comments_movie_idx ON movie_comments(movie_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS movie_comments_created_idx ON movie_comments(created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS movie_comments_user_idx ON movie_comments(user_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS movies_title_idx ON movies USING gin (to_tsvector('english', title || ' ' || coalesce(description, '')));
