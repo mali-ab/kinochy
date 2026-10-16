@@ -5,7 +5,7 @@ using Kinochy.Api.Models;
 
 namespace Kinochy.Api.Services;
 
-public sealed class MovieService(Database database, IWebHostEnvironment environment)
+public sealed class MovieService(Database database, IWebHostEnvironment environment, MediaLibraryService mediaLibrary)
 {
     private const long UploadMaxBytes = 8589934592L;
     private const string Columns = "id,slug,title,original_title,description,year,country,genre,genres,type,duration,rating,difficulty,accent,age_rating,cover_url,video_path,created_at,updated_at";
@@ -86,19 +86,22 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         var subtitleZip=form.Files.GetFile("subtitleZip");
         var hlsFiles=form.Files.Where(file=>file.Name=="hlsFiles").ToList();
         var qualityZips=form.Files.Where(file=>file.Name.StartsWith("quality_",StringComparison.OrdinalIgnoreCase)).Select(file=>(Quality:file.Name[8..].ToLowerInvariant(),Zip:file)).ToList();
+        var serverMediaPath=form["serverMediaPath"].ToString().Trim();
         var isHls=playlist is not null && Path.GetExtension(playlist.FileName).Equals(".m3u8",StringComparison.OrdinalIgnoreCase);
         var isHlsZip=playlist is not null && Path.GetExtension(playlist.FileName).Equals(".zip",StringComparison.OrdinalIgnoreCase);
         if(!isHls && !isHlsZip && hlsFiles.Count>0)throw new ApiException("HLS segments require an .m3u8 playlist.");
         if(isHlsZip && hlsFiles.Count>0)throw new ApiException("A ZIP bundle must contain all HLS playlists and media files.");
+        if(serverMediaPath.Length>0&&(playlist is not null||hlsFiles.Count>0||qualityZips.Count>0))throw new ApiException("Choose either a server movie folder or uploaded files, not both.");
         if(qualityZips.Count>0&&(playlist is not null||hlsFiles.Count>0))throw new ApiException("Upload either separate quality ZIPs or one complete HLS bundle, not both.");
-        if(id is null && playlist is null && qualityZips.Count==0)throw new ApiException("Video or HLS quality ZIP is required");
+        if(id is null && playlist is null && qualityZips.Count==0 && serverMediaPath.Length==0)throw new ApiException("Video, HLS quality ZIP, or server movie folder is required");
         if(playlist is not null && !isHls && !isHlsZip && !new[]{".mp4",".webm",".mkv"}.Contains(Path.GetExtension(playlist.FileName),StringComparer.OrdinalIgnoreCase))throw new ApiException("Upload an MP4, WebM, MKV, M3U8 playlist, or HLS ZIP bundle.");
         var uploadRoot=Path.Combine(environment.ContentRootPath,"storage","uploads");Directory.CreateDirectory(uploadRoot);
         async Task<string?> Save(string key){var file=form.Files.GetFile(key);if(file is null)return null;var name=$"{Guid.NewGuid():N}{Path.GetExtension(file.FileName)}";var path=Path.Combine(uploadRoot,name);await using var output=File.Create(path);await file.CopyToAsync(output);return path;}
-        var video=qualityZips.Count>0?await HlsUpload.SaveQualityBundleAsync(qualityZips,uploadRoot,existingMovie?.VideoPath):isHlsZip?await HlsUpload.SaveZipAsync(playlist!,uploadRoot):isHls?await HlsUpload.SaveAsync(playlist!,hlsFiles,uploadRoot):await Save("video");
+        var libraryImport=serverMediaPath.Length>0?await mediaLibrary.ImportAsync(serverMediaPath,uploadRoot):default;
+        var video=serverMediaPath.Length>0?libraryImport.Playlist:qualityZips.Count>0?await HlsUpload.SaveQualityBundleAsync(qualityZips,uploadRoot,existingMovie?.VideoPath):isHlsZip?await HlsUpload.SaveZipAsync(playlist!,uploadRoot):isHls?await HlsUpload.SaveAsync(playlist!,hlsFiles,uploadRoot):await Save("video");
         var cover=await Save("cover");var en=form.Files.GetFile("subtitleEn");var ru=form.Files.GetFile("subtitleRu");
         if(subtitleZip is not null&&(en is not null||ru is not null))throw new ApiException("Upload a subtitle ZIP or separate subtitle files, not both.");
-        var subtitleSources=new Dictionary<string,string>();
+        var subtitleSources=serverMediaPath.Length>0?libraryImport.Subtitles:new Dictionary<string,string>();
         if(subtitleZip is not null)subtitleSources=await SubtitleBundle.ReadAsync(subtitleZip);
         else{if(en is not null)subtitleSources["en"]=await ReadTextAsync(en);if(ru is not null)subtitleSources["ru"]=await ReadTextAsync(ru);}
         var suffix=(id??Guid.NewGuid()).ToString("N")[..8];

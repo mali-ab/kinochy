@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Kinochy.Api.Controllers;
 
 [ApiController]
-public sealed class AdminController(Database database,MovieService movies,MovieCommunityService community,TokenService tokens):ControllerBase
+public sealed class AdminController(Database database,MovieService movies,MovieCommunityService community,MediaLibraryService mediaLibrary,TokenService tokens):ControllerBase
 {
     private void RequireAdmin()
     {
@@ -41,6 +41,31 @@ public sealed class AdminController(Database database,MovieService movies,MovieC
 
     [HttpDelete("api/admin/movies/{id:guid}")]
     public async Task<object> DeleteMovie(Guid id){RequireAdmin();await movies.DeleteAsync(id);return new{ok=true};}
+
+    [HttpPost("api/admin/media-library/scan")]
+    public MediaLibraryScan ScanMediaLibrary(MediaLibraryPathRequest value)
+    {
+        RequireAdmin();
+        return mediaLibrary.Scan(value.Path);
+    }
+
+    // Moderation endpoints use the same role-protected session as the rest of
+    // the admin API. Pagination is mandatory and capped in the service.
+    [HttpGet("api/admin/comments")]
+    public Task<AdminCommentPage> Comments([FromQuery]int page=1,[FromQuery]int pageSize=25,
+        [FromQuery]string? search=null,[FromQuery]Guid? movieId=null)
+    {
+        RequireAdmin();
+        return community.AdminCommentsAsync(page,pageSize,search,movieId);
+    }
+
+    [HttpDelete("api/admin/comments/{id:guid}")]
+    public async Task<IActionResult> DeleteComment(Guid id)
+    {
+        RequireAdmin();
+        await community.RemoveCommentAsAdminAsync(id);
+        return NoContent();
+    }
 
     [HttpPost("api/admin/series/{id:guid}/episodes")]
     public async Task<IActionResult> AddSeriesEpisode(Guid id,SeriesEpisodeRequest value)

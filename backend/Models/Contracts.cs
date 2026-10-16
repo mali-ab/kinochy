@@ -37,6 +37,13 @@ public sealed record GenreView(string Code, string Tm, string En, string Ru);
 public sealed record CountryView(string Code, string Name);
 public sealed record CommentRequest(string Body);
 public sealed record MovieComment(Guid Id, Guid UserId, string Username, string Body, DateTime CreatedAt);
+public sealed record AdminComment(Guid Id, Guid MovieId, string MovieTitle, string MovieSlug,
+    Guid UserId, string Username, string Email, string Body, DateTime CreatedAt);
+public sealed record AdminCommentPage(List<AdminComment> Items, int Page, int PageSize, long Total);
+public sealed record MediaLibraryPathRequest(string Path);
+public sealed record MediaLibraryItem(string Path, string Title, string Type, int? Year, string[] Qualities,
+    string[] SubtitleLanguages, string[] Warnings);
+public sealed record MediaLibraryScan(string Root, List<MediaLibraryItem> Items);
 public sealed record SeriesEpisodeRequest(Guid MovieId, int SeasonNumber, int EpisodeNumber, string? Title);
 public sealed record SeriesEpisode(Guid Id, Guid MovieId, int EpisodeNumber, string Title, string Slug, string? CoverUrl, string? Duration);
 public sealed record SeriesSeason(int Number, List<SeriesEpisode> Episodes);

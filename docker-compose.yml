@@ -34,11 +34,16 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-kinochy}:${POSTGRES_PASSWORD:-kinochy}@postgres:5432/${POSTGRES_DB:-kinochy}
       LIBRETRANSLATE_URL: ${LIBRETRANSLATE_URL:-https://translate.mstdn.social/translate}
       LIBRETRANSLATE_API_KEY: ${LIBRETRANSLATE_API_KEY:-}
+      MEDIA_LIBRARY_ROOT: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
     expose:
       - "4000"
     volumes:
       - app_storage:/app/storage
       - ./backend/storage/preloaded:/app/storage/preloaded:ro
+      - type: bind
+        source: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
+        target: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
+        read_only: true
 
   frontend:
     build:

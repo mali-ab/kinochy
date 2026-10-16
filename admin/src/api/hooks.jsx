@@ -3,13 +3,18 @@ import { useMemo } from 'react';
 import { normalizeSubtitleCues } from '../player/subtitleCues.js';
 import { normalizeGenreCatalog } from '../ui/locale.jsx';
 import * as endpoints from './endpoints';
-import { genresQuery, queryKeys, subtitlesQuery } from './queries';
+import { countriesQuery, genresQuery, queryKeys, subtitlesQuery } from './queries';
 
 // --- Catalog reads (subset of the public site's hooks used by the admin) ---
 
 export function useGenres() {
   const query = useQuery(genresQuery());
   return useMemo(() => normalizeGenreCatalog(query.data ?? []), [query.data]);
+}
+
+export function useCountries() {
+  const query = useQuery(countriesQuery());
+  return query.data ?? [];
 }
 
 export function useSubtitles(slug) {

@@ -27,6 +27,7 @@ builder.Services.AddScoped<MovieService>();
 builder.Services.AddScoped<MovieCommunityService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<MediaService>();
+builder.Services.AddScoped<MediaLibraryService>();
 builder.Services.AddScoped<SubscriptionService>();
 builder.Services.AddSingleton<PreloadedMediaSeeder>();
 

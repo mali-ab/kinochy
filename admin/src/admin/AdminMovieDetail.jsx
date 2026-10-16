@@ -1,10 +1,11 @@
-import { Edit3, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit3, MessageSquareText, Plus, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { moviePosterFallback } from '../api/client';
+import { deleteAdminComment } from '../api/endpoints';
 import { useAddEpisode, useDeleteMovie, useRemoveEpisode, useSubtitles } from '../api/hooks.jsx';
-import { adminMovieQuery, moviesQuery, seasonsQuery } from '../api/queries';
+import { adminCommentsQuery, adminMovieQuery, moviesQuery, seasonsQuery } from '../api/queries';
 import MoviePlayer from '../player/MoviePlayer.jsx';
 import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
 import { useConfirm } from './confirm.jsx';
@@ -71,7 +72,63 @@ export default function AdminMovieDetail({ id }) {
       </div>
       <MoviePlayer movie={movie} subtitles={subtitles} access={{ hasFullAccess: true }} />
       {movie.type === 'Series' ? <AdminSeriesEpisodes movie={movie} /> : null}
+      <AdminMovieComments movie={movie} />
     </div>
+  );
+}
+
+function AdminMovieComments({ movie }) {
+  const [page, setPage] = useState(1);
+  const pageSize = 5;
+  const filters = { page, pageSize, search: '', movieId: movie.id };
+  const commentsResult = useQuery(adminCommentsQuery(filters));
+  const queryClient = useQueryClient();
+  const { requestConfirm } = useConfirm();
+  const comments = commentsResult.data?.items ?? [];
+  const total = commentsResult.data?.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  const removeComment = useMutation({
+    mutationFn: deleteAdminComment,
+    onSuccess: async () => {
+      if (comments.length === 1 && page > 1) setPage((current) => current - 1);
+      await queryClient.invalidateQueries({ queryKey: ['admin', 'comments'] });
+    }
+  });
+
+  function confirmDelete(comment) {
+    requestConfirm({
+      title: 'Delete comment?',
+      body: `Remove ${comment.username}'s comment from “${movie.title}”? This cannot be undone.`,
+      actionLabel: 'Delete comment',
+      danger: true,
+      onConfirm: () => removeComment.mutateAsync(comment.id)
+    });
+  }
+
+  return (
+    <section className="admin-detail-comments">
+      <div className="admin-detail-comments-head">
+        <div><span className="admin-section-kicker">Community</span><h3>Comments</h3><p>{total} comment{total === 1 ? '' : 's'} on this title</p></div>
+        <MessageSquareText size={22} />
+      </div>
+      {commentsResult.error ? <p className="form-error">{commentsResult.error.message}</p> : null}
+      <div className={`admin-comments-panel${commentsResult.isFetching ? ' loading' : ''}`}>
+        {commentsResult.isPending ? <div className="admin-comments-status">Loading comments…</div> : comments.length ? comments.map((comment) => (
+          <article className="admin-comment-card" key={comment.id}>
+            <div className="admin-comment-meta">
+              <span className="admin-comment-avatar">{comment.username?.slice(0, 1).toUpperCase() || '?'}</span>
+              <div><strong>{comment.username}</strong><small>{comment.email}</small></div>
+              <time dateTime={comment.createdAt}>{new Date(comment.createdAt).toLocaleString()}</time>
+            </div>
+            <p>{comment.body}</p>
+            <div className="admin-comment-actions admin-comment-actions-end">
+              <button className="danger" disabled={removeComment.isPending} onClick={() => confirmDelete(comment)}><Trash2 size={16} /> Delete</button>
+            </div>
+          </article>
+        )) : <div className="admin-comments-empty"><MessageSquareText size={26} /><strong>No comments yet</strong><span>Viewer comments for this movie will appear here.</span></div>}
+      </div>
+      {total > pageSize ? <div className="admin-pagination"><span>Page {page} of {pages}</span><div><button disabled={page <= 1 || commentsResult.isFetching} onClick={() => setPage((current) => current - 1)}><ChevronLeft size={17} /> Previous</button><button disabled={page >= pages || commentsResult.isFetching} onClick={() => setPage((current) => current + 1)}>Next <ChevronRight size={17} /></button></div></div> : null}
+    </section>
   );
 }
 
