@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -8,7 +10,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-kinochy}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kinochy}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -20,7 +22,6 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NODE_IMAGE: node:22-bookworm-slim
         DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0}
         DOTNET_RUNTIME_IMAGE: ${DOTNET_RUNTIME_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0}
     container_name: kinochy_app
@@ -36,7 +37,7 @@ services:
       LIBRETRANSLATE_API_KEY: ${LIBRETRANSLATE_API_KEY:-}
       MEDIA_LIBRARY_ROOT: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
     expose:
-      - "4000"
+      - '4000'
     volumes:
       - app_storage:/app/storage
       - ./backend/storage/preloaded:/app/storage/preloaded:ro
@@ -45,40 +46,19 @@ services:
         target: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
         read_only: true
 
-  frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: frontend-runtime
-      args:
-        NODE_IMAGE: node:22-bookworm-slim
-    container_name: kinochy_frontend
-    restart: unless-stopped
-    depends_on:
-      - app
-    environment:
-      API_ORIGIN: http://app:4000
-    expose:
-      - "5173"
-
-  # Single front door: serves the admin SPA under /admin, proxies /api and
-  # /media to the API, and everything else to the Next.js site. One origin
-  # keeps the HttpOnly admin session cookie same-site.
   edge:
     build:
       context: .
       dockerfile: Dockerfile
       target: admin-runtime
       args:
-        NODE_IMAGE: node:22-bookworm-slim
         NGINX_IMAGE: ${NGINX_IMAGE:-nginx:1.27-alpine}
     container_name: kinochy_edge
     restart: unless-stopped
     depends_on:
       - app
-      - frontend
     ports:
-      - "4000:80"
+      - '4000:80'
 
 volumes:
   postgres_data:

@@ -2,21 +2,14 @@
   "name": "kinochy-workspace",
   "version": "0.1.0",
   "private": true,
-  "workspaces": [
-    "frontend"
-  ],
   "scripts": {
-    "dev": "concurrently \"dotnet run --project backend\" \"npm run dev --workspace frontend\"",
-    "dev:client": "npm run dev --workspace frontend",
+    "dev": "dotnet run --project backend",
     "dev:admin": "npm run dev --prefix admin",
     "dev:server": "dotnet run --project backend",
-    "build": "npm run build --workspace frontend",
     "build:admin": "npm run build --prefix admin",
     "start": "dotnet run --project backend --no-build",
     "format": "prettier --write . && dotnet csharpier format backend",
     "format:check": "prettier --check . && dotnet csharpier check backend",
-    "format:frontend": "prettier --write .",
-    "format:frontend:check": "prettier --check .",
     "format:backend": "dotnet csharpier format backend",
     "format:backend:check": "dotnet csharpier check backend"
   },
