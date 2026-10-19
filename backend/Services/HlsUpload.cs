@@ -67,16 +67,6 @@ public static partial class HlsUpload
         try
         {
             await using var source = zipFile.OpenReadStream();
-            Console.WriteLine($"File: {zipFile.FileName}");
-            Console.WriteLine($"IFormFile length: {zipFile.Length}");
-
-            await using var source = zipFile.OpenReadStream();
-
-            Console.WriteLine($"Stream CanRead: {source.CanRead}");
-            Console.WriteLine($"Stream CanSeek: {source.CanSeek}");
-            Console.WriteLine($"Stream Length: {source.Length}");
-            Console.WriteLine($"Stream Position: {source.Position}");
-
             using var archive = new ZipArchive(source, ZipArchiveMode.Read, leaveOpen: false);
             var entries = archive.Entries.Where(entry => !string.IsNullOrEmpty(entry.Name)).ToList();
             if (entries.Count == 0) throw new ApiException("The HLS ZIP archive is empty.");
@@ -280,7 +270,7 @@ public static partial class HlsUpload
                    | ((long)packet[offset + 1] << 22)
                    | ((long)((packet[offset + 2] >> 1) & 0x7F) << 15)
                    | ((long)packet[offset + 3] << 7)
-                   | ((packet[offset + 4] >> 1) & 0x7F);
+                   | (long)((packet[offset + 4] >> 1) & 0x7F);
         }
         return null;
     }
