@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.IO.Compression;
+using System.Text;
 using System.Text.RegularExpressions;
 using Kinochy.Api.Infrastructure;
 
@@ -85,10 +87,19 @@ public static partial class HlsUpload
 
             var names = files.Keys.ToHashSet(StringComparer.Ordinal);
             var playlists = files.Keys.Where(name => Path.GetExtension(name).Equals(".m3u8", StringComparison.OrdinalIgnoreCase)).ToList();
-            if (playlists.Count == 0) throw new ApiException("The HLS ZIP archive does not contain an M3U8 playlist.");
-            foreach (var name in playlists) await ValidatePlaylistAsync(files[name], name, names);
+            string? generatedPlaylist = null;
+            if (playlists.Count == 0)
+            {
+                var segments = files.Where(item => Path.GetExtension(item.Key).Equals(".ts", StringComparison.OrdinalIgnoreCase)).ToList();
+                if (segments.Count == 0 || segments.Count != files.Count)
+                    throw new ApiException("The HLS ZIP needs an M3U8 playlist. A playlist can only be generated automatically when the ZIP contains only .ts segment files.");
+                generatedPlaylist = await BuildTsPlaylistAsync(segments);
+                playlists.Add("stream.m3u8");
+            }
+            if (generatedPlaylist is null)
+                foreach (var name in playlists) await ValidatePlaylistAsync(files[name], name, names);
 
-            var mainPlaylist = SelectMainPlaylist(playlists);
+            var mainPlaylist = generatedPlaylist is null ? SelectMainPlaylist(playlists) : "stream.m3u8";
             foreach (var (relative, entry) in files)
             {
                 var destination = Path.Combine(directory, relative.Replace('/', Path.DirectorySeparatorChar));
@@ -97,6 +108,8 @@ public static partial class HlsUpload
                 await using var output = File.Create(destination);
                 await input.CopyToAsync(output);
             }
+            if (generatedPlaylist is not null)
+                await File.WriteAllTextAsync(Path.Combine(directory, "stream.m3u8"), generatedPlaylist);
             return Path.Combine(directory, mainPlaylist.Replace('/', Path.DirectorySeparatorChar));
         }
         catch (InvalidDataException)
@@ -196,6 +209,92 @@ public static partial class HlsUpload
         }
         return string.Join("\n", lines) + "\n";
     }
+
+    private static async Task<string> BuildTsPlaylistAsync(List<KeyValuePair<string, ZipArchiveEntry>> segmentFiles)
+    {
+        var segments = segmentFiles
+            .OrderBy(item => NaturalSortKey(item.Key), StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var timestamps = new List<long?>(segments.Count);
+        foreach (var (_, entry) in segments) timestamps.Add(await ReadFirstPtsAsync(entry));
+
+        var durations = new double?[segments.Count];
+        for (var index = 0; index < segments.Count; index++)
+        {
+            if (index + 1 < segments.Count && timestamps[index] is long first && timestamps[index + 1] is long next)
+                durations[index] = ValidDuration(PtsSeconds(first, next));
+        }
+
+        var measured = durations.Where(value => value.HasValue).Select(value => value!.Value).Order().ToList();
+        var fallback = measured.Count == 0 ? 6d : measured[measured.Count / 2];
+        for (var index = 0; index < durations.Length; index++) durations[index] ??= fallback;
+
+        var targetDuration = Math.Max(1, (int)Math.Ceiling(durations.Max(value => value!.Value)));
+        var playlist = new StringBuilder()
+            .AppendLine("#EXTM3U")
+            .AppendLine("#EXT-X-VERSION:3")
+            .AppendLine($"#EXT-X-TARGETDURATION:{targetDuration}")
+            .AppendLine("#EXT-X-MEDIA-SEQUENCE:0")
+            .AppendLine("#EXT-X-PLAYLIST-TYPE:VOD")
+            .AppendLine("#EXT-X-INDEPENDENT-SEGMENTS");
+        for (var index = 0; index < segments.Count; index++)
+        {
+            playlist.Append("#EXTINF:").Append(durations[index]!.Value.ToString("0.######", CultureInfo.InvariantCulture)).AppendLine(",");
+            playlist.AppendLine(segments[index].Key);
+        }
+        return playlist.AppendLine("#EXT-X-ENDLIST").ToString();
+    }
+
+    private static string NaturalSortKey(string name) => Regex.Replace(
+        name,
+        @"\d+",
+        match => match.Value.TrimStart('0').PadLeft(20, '0'));
+
+    private static async Task<long?> ReadFirstPtsAsync(ZipArchiveEntry entry)
+    {
+        await using var stream = entry.Open();
+        var packet = new byte[188];
+        var packetsRead = 0;
+        while (packetsRead++ < 10_000 && await ReadPacketAsync(stream, packet))
+        {
+            if (packet[0] != 0x47 || (packet[1] & 0x40) == 0) continue;
+            var adaptationControl = (packet[3] >> 4) & 0x03;
+            if (adaptationControl is 0 or 2) continue;
+            var payload = 4;
+            if (adaptationControl == 3) payload += packet[4] + 1;
+            if (payload + 14 > packet.Length || packet[payload] != 0 || packet[payload + 1] != 0 || packet[payload + 2] != 1) continue;
+            if ((packet[payload + 7] & 0x80) == 0 || packet[payload + 8] < 5) continue;
+
+            var offset = payload + 9;
+            return ((long)((packet[offset] >> 1) & 0x07) << 30)
+                   | ((long)packet[offset + 1] << 22)
+                   | ((long)((packet[offset + 2] >> 1) & 0x7F) << 15)
+                   | ((long)packet[offset + 3] << 7)
+                   | ((packet[offset + 4] >> 1) & 0x7F);
+        }
+        return null;
+    }
+
+    private static async Task<bool> ReadPacketAsync(Stream stream, byte[] packet)
+    {
+        var offset = 0;
+        while (offset < packet.Length)
+        {
+            var read = await stream.ReadAsync(packet.AsMemory(offset, packet.Length - offset));
+            if (read == 0) return false;
+            offset += read;
+        }
+        return true;
+    }
+
+    private static double PtsSeconds(long first, long last)
+    {
+        var ticks = last - first;
+        if (ticks < 0) ticks += 1L << 33;
+        return ticks / 90_000d;
+    }
+
+    private static double? ValidDuration(double seconds) => seconds is >= 0.1 and <= 120 ? seconds : null;
 
     private static string CreateBundleDirectory(string uploadRoot)
     {
