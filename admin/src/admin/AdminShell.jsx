@@ -49,8 +49,8 @@ function AdminChrome({ admin, onLogout, children }) {
   const t = useTranslations();
   const { requestConfirm } = useConfirm();
   const { pathname } = useLocation();
-  const usersActive = pathname.startsWith('/admin/users');
-  const commentsActive = pathname.startsWith('/admin/comments');
+  const usersActive = pathname.startsWith('/users');
+  const commentsActive = pathname.startsWith('/comments');
 
   async function logout() {
     await adminLogout();
@@ -60,7 +60,7 @@ function AdminChrome({ admin, onLogout, children }) {
   return (
     <section className="admin-page">
       <div className="admin-head">
-        <Link to="/admin" className="admin-brand">
+        <Link to="/" className="admin-brand">
           <span className="brand-mark">
             <img src={logo} alt="" width={32} height={32} />
           </span>
@@ -86,19 +86,19 @@ function AdminChrome({ admin, onLogout, children }) {
       </div>
 
       <div className="admin-tabs">
-        <Link className={pathname === '/admin/films' ? 'active' : ''} to="/admin/films">
+        <Link className={pathname === '/films' ? 'active' : ''} to="/films">
           <Film size={18} /><span>Films<small>Feature movies</small></span>
         </Link>
-        <Link className={pathname === '/admin/series' ? 'active' : ''} to="/admin/series">
+        <Link className={pathname === '/series' ? 'active' : ''} to="/series">
           <MonitorPlay size={18} /><span>Serials<small>Seasons and episodes</small></span>
         </Link>
-        <Link className={pathname === '/admin/cartoons' ? 'active' : ''} to="/admin/cartoons">
+        <Link className={pathname === '/cartoons' ? 'active' : ''} to="/cartoons">
           <Clapperboard size={18} /><span>Cartoons<small>Animated titles</small></span>
         </Link>
-        <Link className={usersActive ? 'active' : ''} to="/admin/users">
+        <Link className={usersActive ? 'active' : ''} to="/users">
           <Users size={18} /><span>Users<small>Accounts and access</small></span>
         </Link>
-        <Link className={commentsActive ? 'active' : ''} to="/admin/comments">
+        <Link className={commentsActive ? 'active' : ''} to="/comments">
           <MessageSquareText size={18} /><span>Comments<small>Review discussions</small></span>
         </Link>
       </div>

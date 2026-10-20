@@ -51,7 +51,7 @@ export default function AdminMoviesList({ type = 'Movie' }) {
     <>
       <div className="admin-list-head">
         <div><span className="admin-section-kicker">Content library</span><h2>{copy.title}</h2><p>{movies.length} {copy.singular}{movies.length === 1 ? '' : 's'} in your catalog</p></div>
-        <Link className="primary" to={`/admin/movies/new?type=${type}`}>
+        <Link className="primary" to={`/movies/new?type=${type}`}>
           <Plus size={18} /> Add title
         </Link>
       </div>
@@ -65,7 +65,7 @@ export default function AdminMoviesList({ type = 'Movie' }) {
 
       {isPending ? <AdminRowsSkeleton rows={7} /> : visible.length ? <div className="admin-movie-list">
         {visible.map((movie) => (
-          <Link key={movie.id} className="admin-movie-row" to={`/admin/movies/${movie.id}`}>
+          <Link key={movie.id} className="admin-movie-row" to={`/movies/${movie.id}`}>
             <span className="admin-row-cover" style={{ position: 'relative', overflow: 'hidden', ...(movie.coverUrl ? undefined : { background: moviePosterFallback(movie) }) }}>
               {movie.coverUrl ? <img src={movie.coverUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
             </span>
@@ -77,7 +77,7 @@ export default function AdminMoviesList({ type = 'Movie' }) {
             <ChevronRight className="admin-row-arrow" size={19} />
           </Link>
         ))}
-      </div> : <div className="admin-empty-state"><span><Film size={28} /></span><h3>{movies.length ? 'No matching titles' : `No ${copy.title.toLowerCase()} yet`}</h3><p>{movies.length ? 'Change or reset the filters to see more results.' : `Add your first ${copy.empty} to this section.`}</p>{movies.length ? <button className="primary" onClick={clearFilters}>Reset filters</button> : <Link className="primary" to={`/admin/movies/new?type=${type}`}><Plus size={17} /> Add title</Link>}</div>}
+      </div> : <div className="admin-empty-state"><span><Film size={28} /></span><h3>{movies.length ? 'No matching titles' : `No ${copy.title.toLowerCase()} yet`}</h3><p>{movies.length ? 'Change or reset the filters to see more results.' : `Add your first ${copy.empty} to this section.`}</p>{movies.length ? <button className="primary" onClick={clearFilters}>Reset filters</button> : <Link className="primary" to={`/movies/new?type=${type}`}><Plus size={17} /> Add title</Link>}</div>}
       {filtered.length > PAGE_SIZE ? <div className="admin-pagination"><span>Showing {(currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}</span><div><button disabled={currentPage <= 1} onClick={() => updateFilters({ page: currentPage - 1 })}><ChevronLeft size={17} /> Previous</button><button disabled={currentPage >= pages} onClick={() => updateFilters({ page: currentPage + 1 })}>Next <ChevronRight size={17} /></button></div></div> : null}
     </>
   );

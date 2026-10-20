@@ -7,14 +7,13 @@ import AdminShell from './admin/AdminShell.jsx';
 import AdminUserDetail from './admin/AdminUserDetail.jsx';
 import AdminUsersList from './admin/AdminUsersList.jsx';
 
-// The routes mirror the former Next.js app/admin tree one to one, so the
-// /admin/... URLs stay the same in development and production.
+// The standalone admin application owns its origin, so routes start at /.
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route
-          path="/admin"
+          path="/"
           element={
             <AdminShell>
               <Outlet />
@@ -32,9 +31,9 @@ export default function App() {
           <Route path="users/new" element={<AdminUserDetail mode="add" />} />
           <Route path="users/:id" element={<UserDetailRoute />} />
           <Route path="comments" element={<AdminComments />} />
-          <Route path="*" element={<Navigate to="/admin/films" replace />} />
+          <Route path="*" element={<Navigate to="/films" replace />} />
         </Route>
-        <Route path="*" element={<Navigate to="/admin" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

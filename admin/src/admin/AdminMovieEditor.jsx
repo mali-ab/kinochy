@@ -32,12 +32,12 @@ export default function AdminMovieEditor({ id = null }) {
       initialType={initialType}
       genres={genres}
       countryOptions={countryOptions}
-      onCancel={() => navigate(movie ? `/admin/movies/${movie.id}` : '/admin')}
+      onCancel={() => navigate(movie ? `/movies/${movie.id}` : '/')}
       onSaved={(saved) => {
         queryClient.invalidateQueries({ queryKey: ['movies'] });
         queryClient.invalidateQueries({ queryKey: ['movie'] });
         queryClient.invalidateQueries({ queryKey: ['subtitles'] });
-        navigate(`/admin/movies/${saved.id}`);
+        navigate(`/movies/${saved.id}`);
       }}
     />
   );

@@ -80,7 +80,7 @@ export default function AdminComments() {
             </div>
             <p>{comment.body}</p>
             <div className="admin-comment-actions">
-              <Link to={`/admin/movies/${comment.movieId}`}><MessageSquareText size={15} /> {comment.movieTitle}</Link>
+              <Link to={`/movies/${comment.movieId}`}><MessageSquareText size={15} /> {comment.movieTitle}</Link>
               <button className="danger" disabled={remove.isPending} onClick={() => confirmDelete(comment)}><Trash2 size={16} /> Delete</button>
             </div>
           </article>

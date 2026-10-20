@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 
 // The admin SPA is always served same-origin with the API:
 // - dev: this Vite server proxies /api and /media to the backend,
-// - production: nginx serves the build under /admin and routes /api and
+// - production: nginx serves the build at / and routes /api and
 //   /media to the ASP.NET app, so relative requests just work.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');

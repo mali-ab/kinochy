@@ -57,7 +57,7 @@ export default function AdminUsersList() {
         <div className="admin-list-head">
           <div><span className="admin-section-kicker">Account management</span><h2>Users</h2><p>{users.length} registered account{users.length === 1 ? '' : 's'} · {selected.length} selected</p></div>
           <div className="admin-actions">
-            <Link className="primary" to="/admin/users/new">
+            <Link className="primary" to="/users/new">
               <Plus size={16} /> Add user
             </Link>
             <button
@@ -97,7 +97,7 @@ export default function AdminUsersList() {
                 <td>{user.language?.toUpperCase()}</td>
                 <td>{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'}</td>
                 <td>
-                  <Link to={`/admin/users/${user.id}`}><Edit3 size={15} /></Link>
+                  <Link to={`/users/${user.id}`}><Edit3 size={15} /></Link>
                   <button
                     className="danger"
                     onClick={() =>

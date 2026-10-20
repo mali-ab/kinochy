@@ -22,7 +22,7 @@ export default function AdminMovieDetail({ id }) {
   const { locale } = useLocale();
 
   function deleteMovie() {
-    deleteMovieMutation.mutate(id, { onSuccess: () => navigate('/admin') });
+    deleteMovieMutation.mutate(id, { onSuccess: () => navigate('/') });
   }
 
   if (movieResult.isPending) return <AdminDetailSkeleton />;
@@ -32,9 +32,9 @@ export default function AdminMovieDetail({ id }) {
   return (
     <div className="admin-detail">
       <div className="admin-detail-head">
-        <button onClick={() => navigate('/admin')}>Back</button>
+        <button onClick={() => navigate('/')}>Back</button>
         <div className="admin-actions">
-          <Link to={`/admin/movies/${movie.id}/edit`}>
+          <Link to={`/movies/${movie.id}/edit`}>
             <Edit3 size={16} /> Edit
           </Link>
           <button

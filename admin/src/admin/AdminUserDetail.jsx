@@ -32,7 +32,7 @@ export default function AdminUserDetail({ mode, id = null }) {
       } else {
         await createUser(payload);
       }
-      navigate('/admin/users');
+      navigate('/users');
     } catch (err) {
       setError(err.message);
     }
@@ -44,7 +44,7 @@ export default function AdminUserDetail({ mode, id = null }) {
     <form className="admin-form compact admin-user-panel" onSubmit={submit}>
       <div className="admin-list-head">
         <h2>{mode === 'edit' ? 'Edit user' : 'Add user'}</h2>
-        <button type="button" onClick={() => navigate('/admin/users')}>Cancel</button>
+        <button type="button" onClick={() => navigate('/users')}>Cancel</button>
       </div>
       <div className="form-grid">
         <label>Username<input value={form.username} onChange={(event) => setForm((value) => ({ ...value, username: event.target.value }))} required /></label>
