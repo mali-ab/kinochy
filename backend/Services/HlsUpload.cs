@@ -171,6 +171,33 @@ public static partial class HlsUpload
         }
     }
 
+    public static async Task<string> RemoveQualitiesAsync(string masterPath, IEnumerable<string> requestedQualities)
+    {
+        var removals=requestedQualities.Select(quality=>quality.Trim().ToLowerInvariant()).Where(quality=>quality.Length>0).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        if(removals.Count==0)return masterPath;
+        if(removals.Any(quality=>!QualityProfiles.ContainsKey(quality)))throw new ApiException("Unsupported movie quality removal request.");
+        if(!File.Exists(masterPath)||!Path.GetExtension(masterPath).Equals(".m3u8",StringComparison.OrdinalIgnoreCase))throw new ApiException("The movie does not have an editable HLS quality playlist.");
+
+        var variants=ReadMasterVariants(masterPath);
+        var remaining=variants.Where(item=>!removals.Contains(item.Quality)).ToList();
+        if(remaining.Count==0)throw new ApiException("A movie must keep at least one HLS quality.");
+
+        var masterDirectory=Path.GetFullPath(Path.GetDirectoryName(masterPath)!);
+        var directoryPrefix=masterDirectory.TrimEnd(Path.DirectorySeparatorChar)+Path.DirectorySeparatorChar;
+        foreach(var variant in variants.Where(item=>removals.Contains(item.Quality)))
+        {
+            var relative=variant.Playlist.Replace('/',Path.DirectorySeparatorChar);
+            var firstPart=relative.Split(Path.DirectorySeparatorChar,StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+            if(firstPart is null||!firstPart.Equals(variant.Quality,StringComparison.OrdinalIgnoreCase))continue;
+            var qualityDirectory=Path.GetFullPath(Path.Combine(masterDirectory,firstPart));
+            if(!qualityDirectory.StartsWith(directoryPrefix,StringComparison.Ordinal)||!Directory.Exists(qualityDirectory))continue;
+            var attributes=File.GetAttributes(qualityDirectory);
+            Directory.Delete(qualityDirectory,recursive:(attributes&FileAttributes.ReparsePoint)==0);
+        }
+        await File.WriteAllTextAsync(masterPath,BuildMasterPlaylist(remaining));
+        return masterPath;
+    }
+
     private static List<(string Quality, string Playlist)> ReadMasterVariants(string masterPath)
     {
         var variants = new List<(string Quality, string Playlist)>();

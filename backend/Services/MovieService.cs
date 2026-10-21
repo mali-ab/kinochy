@@ -91,23 +91,29 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         var title=titleEn;
         var movieType=NormalizeMovieType(form["type"].ToString());
         foreach(var file in form.Files)if(file.Length>UploadMaxBytes)throw new ApiException($"{file.FileName} exceeds the 8 GiB upload limit",413);
-        var playlist=form.Files.GetFile("video");
+        var rejectedVideo=form.Files.GetFile("video");
         var subtitleZip=form.Files.GetFile("subtitleZip");
-        var hlsFiles=form.Files.Where(file=>file.Name=="hlsFiles").ToList();
+        var rejectedHlsFiles=form.Files.Where(file=>file.Name=="hlsFiles").ToList();
         var qualityZips=form.Files.Where(file=>file.Name.StartsWith("quality_",StringComparison.OrdinalIgnoreCase)).Select(file=>(Quality:file.Name[8..].ToLowerInvariant(),Zip:file)).ToList();
+        string[] removeQualities;
+        var removeQualitiesJson=form["removeQualities"].ToString();
+        try{removeQualities=string.IsNullOrWhiteSpace(removeQualitiesJson)?[]:JsonSerializer.Deserialize<string[]>(removeQualitiesJson)??[];}
+        catch(JsonException){throw new ApiException("Invalid movie quality removal list.");}
         var serverMediaPath=form["serverMediaPath"].ToString().Trim();
-        var isHls=playlist is not null && Path.GetExtension(playlist.FileName).Equals(".m3u8",StringComparison.OrdinalIgnoreCase);
-        var isHlsZip=playlist is not null && Path.GetExtension(playlist.FileName).Equals(".zip",StringComparison.OrdinalIgnoreCase);
-        if(!isHls && !isHlsZip && hlsFiles.Count>0)throw new ApiException("HLS segments require an .m3u8 playlist.");
-        if(isHlsZip && hlsFiles.Count>0)throw new ApiException("A ZIP bundle must contain all HLS playlists and media files.");
-        if(serverMediaPath.Length>0&&(playlist is not null||hlsFiles.Count>0||qualityZips.Count>0))throw new ApiException("Choose either a server movie folder or uploaded files, not both.");
-        if(qualityZips.Count>0&&(playlist is not null||hlsFiles.Count>0))throw new ApiException("Upload either separate quality ZIPs or one complete HLS bundle, not both.");
-        if(id is null && !movieType.Equals("Series",StringComparison.Ordinal) && playlist is null && qualityZips.Count==0 && serverMediaPath.Length==0)throw new ApiException("Video, HLS quality ZIP, or server movie folder is required");
-        if(playlist is not null && !isHls && !isHlsZip && !new[]{".mp4",".webm",".mkv"}.Contains(Path.GetExtension(playlist.FileName),StringComparer.OrdinalIgnoreCase))throw new ApiException("Upload an MP4, WebM, MKV, M3U8 playlist, or HLS ZIP bundle.");
+        if(rejectedVideo is not null||rejectedHlsFiles.Count>0)throw new ApiException("Direct video and single HLS bundle uploads are disabled. Upload separate HLS quality ZIPs or select a quality-based server folder.");
+        if(serverMediaPath.Length>0&&qualityZips.Count>0)throw new ApiException("Choose either HLS quality ZIPs or a server movie folder, not both.");
+        if(id is null&&!movieType.Equals("Series",StringComparison.Ordinal)&&qualityZips.Count==0&&serverMediaPath.Length==0)throw new ApiException("Add at least one HLS quality ZIP or select a quality-based server movie folder.");
         var uploadRoot=Path.Combine(environment.ContentRootPath,"storage","uploads");Directory.CreateDirectory(uploadRoot);
         async Task<string?> Save(string key){var file=form.Files.GetFile(key);if(file is null)return null;var name=$"{Guid.NewGuid():N}{Path.GetExtension(file.FileName)}";var path=Path.Combine(uploadRoot,name);await using var output=File.Create(path);await file.CopyToAsync(output);return path;}
         MediaLibraryService.ImportResult? libraryImport=serverMediaPath.Length>0?await mediaLibrary.ImportAsync(serverMediaPath,uploadRoot):null;
-        var video=serverMediaPath.Length>0?libraryImport!.Playlist:qualityZips.Count>0?await HlsUpload.SaveQualityBundleAsync(qualityZips,uploadRoot,existingMovie?.VideoPath):isHlsZip?await HlsUpload.SaveZipAsync(playlist!,uploadRoot):isHls?await HlsUpload.SaveAsync(playlist!,hlsFiles,uploadRoot):await Save("video");
+        var video=serverMediaPath.Length>0?libraryImport!.Playlist:qualityZips.Count>0?await HlsUpload.SaveQualityBundleAsync(qualityZips,uploadRoot,existingMovie?.VideoPath):null;
+        if(removeQualities.Length>0)
+        {
+            if(id is null||existingMovie?.VideoPath is null)throw new ApiException("Movie qualities can only be removed from an existing HLS movie.");
+            var uploadedQualities=qualityZips.Select(item=>item.Quality).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var removals=removeQualities.Where(quality=>!uploadedQualities.Contains(quality)).ToArray();
+            if(removals.Length>0)video=await HlsUpload.RemoveQualitiesAsync(video??existingMovie.VideoPath,removals);
+        }
         var cover=await Save("cover");var en=form.Files.GetFile("subtitleEn");var ru=form.Files.GetFile("subtitleRu");
         if(subtitleZip is not null&&(en is not null||ru is not null))throw new ApiException("Upload a subtitle ZIP or separate subtitle files, not both.");
         var subtitleSources=serverMediaPath.Length>0?libraryImport!.Subtitles:new Dictionary<string,string>();
