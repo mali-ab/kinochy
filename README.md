@@ -37,7 +37,8 @@ Kinochy is a movie-based English learning platform with streaming playback, inte
 - `backend/database/`: PostgreSQL schema and seed data
 - `backend/storage/`: uploaded files and runtime data
 - `docker-compose.yml`: production-style Docker deployment
-- `Dockerfile`: application image build
+- `admin/Dockerfile`: admin SPA image build (Vite build + nginx runtime)
+- `backend/Dockerfile`: backend API image build (ASP.NET Core)
 
 ## Run Only the Backend Without Docker
 

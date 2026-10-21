@@ -1,0 +1,62 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: kinochy_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-kinochy}
+      POSTGRES_USER: ${POSTGRES_USER:-kinochy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kinochy}
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      args:
+        DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0}
+        DOTNET_RUNTIME_IMAGE: ${DOTNET_RUNTIME_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0}
+    container_name: kinochy_app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      JWT_SECRET: ${JWT_SECRET:-change-me-before-production}
+      DATABASE_URL: postgres://${POSTGRES_USER:-kinochy}:${POSTGRES_PASSWORD:-kinochy}@postgres:5432/${POSTGRES_DB:-kinochy}
+      LIBRETRANSLATE_URL: ${LIBRETRANSLATE_URL:-https://translate.mstdn.social/translate}
+      LIBRETRANSLATE_API_KEY: ${LIBRETRANSLATE_API_KEY:-}
+      MEDIA_LIBRARY_ROOT: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
+    expose:
+      - '4000'
+    volumes:
+      - app_storage:/app/storage
+      - ./backend/storage/preloaded:/app/storage/preloaded:ro
+      - type: bind
+        source: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
+        target: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
+        read_only: true
+
+#   edge:
+#     build:
+#       context: .
+#       dockerfile: admin/Dockerfile
+#       args:
+#         NGINX_IMAGE: ${NGINX_IMAGE:-nginx:1.27-alpine}
+#     container_name: kinochy_edge
+#     restart: unless-stopped
+#     depends_on:
+#       - app
+#     ports:
+#       - '4000:80'
+
+# volumes:
+#   postgres_data:
+#   app_storage:
