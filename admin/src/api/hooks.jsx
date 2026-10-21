@@ -66,6 +66,22 @@ export function useAddEpisode(seriesId, slug) {
   });
 }
 
+export function useAddSeason(seriesId, slug) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload) => endpoints.addSeason(seriesId, payload),
+    onSuccess: (seasons) => queryClient.setQueryData(queryKeys.seasons(slug), seasons)
+  });
+}
+
+export function useRemoveSeason(seriesId, slug) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (seasonNumber) => endpoints.removeSeason(seriesId, seasonNumber),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.seasons(slug) })
+  });
+}
+
 export function useRemoveEpisode(seriesId, slug) {
   const queryClient = useQueryClient();
   return useMutation({

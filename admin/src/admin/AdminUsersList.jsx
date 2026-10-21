@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Edit3, Plus, Search, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Crown, Edit3, Plus, Search, ShieldCheck, Trash2, UserRoundCheck, X } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -77,6 +77,11 @@ export default function AdminUsersList() {
             </button>
           </div>
         </div>
+        <section className="admin-view-metrics" aria-label="User overview">
+          <article><span><UserRoundCheck size={19} /></span><div><strong>{users.length}</strong><small>Verified accounts</small></div></article>
+          <article><span><Crown size={19} /></span><div><strong>{users.filter((user) => user.subscription?.hasFullAccess).length}</strong><small>Premium members</small></div></article>
+          <article><span><ShieldCheck size={19} /></span><div><strong>{users.filter((user) => user.role === 'admin').length}</strong><small>Administrators</small></div></article>
+        </section>
         <div className="admin-filter-bar admin-user-filters">
           <label className="admin-search-box"><Search size={17} /><input value={search} onChange={(event) => updateFilters({ search: event.target.value, page: 1 })} placeholder="Search name or email…" />{search ? <button aria-label="Clear search" onClick={() => updateFilters({ search: '', page: 1 })}><X size={15} /></button> : null}</label>
           <label className="admin-filter-field"><span>Role</span><select value={role} onChange={(event) => updateFilters({ role: event.target.value, page: 1 })}><option value="">All roles</option><option value="user">User</option><option value="admin">Admin</option></select></label>
@@ -90,9 +95,9 @@ export default function AdminUsersList() {
             {visible.map((user) => (
               <tr key={user.id}>
                 <td><input type="checkbox" checked={selected.includes(user.id)} onChange={() => toggle(user.id)} /></td>
-                <td>{user.username}</td>
-                <td>{user.email}</td>
-                <td>{user.role}</td>
+                <td><span className="admin-user-cell"><i>{user.username?.slice(0, 1).toUpperCase()}</i><strong>{user.username}</strong></span></td>
+                <td><span className="admin-muted-cell">{user.email}</span></td>
+                <td><span className={`admin-role-badge ${user.role}`}>{user.role}</span></td>
                 <td><span className={`subscription-badge ${user.subscription?.hasFullAccess ? 'premium' : ''}`}>{user.subscription?.hasFullAccess ? 'Premium' : 'Free'}</span></td>
                 <td>{user.language?.toUpperCase()}</td>
                 <td>{user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'}</td>

@@ -1,4 +1,4 @@
-import { Save } from 'lucide-react';
+import { Crown, KeyRound, Save, ShieldCheck, UserRound } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -46,12 +46,16 @@ export default function AdminUserDetail({ mode, id = null }) {
         <h2>{mode === 'edit' ? 'Edit user' : 'Add user'}</h2>
         <button type="button" onClick={() => navigate('/users')}>Cancel</button>
       </div>
+      <div className="admin-user-editor-intro">
+        <span><UserRound size={20} /></span><div><strong>{mode === 'edit' ? 'Account profile' : 'New account'}</strong><small>Identity, permission and subscription controls</small></div>
+        <span><ShieldCheck size={17} /> Role protected</span>
+      </div>
       <div className="form-grid">
         <label>Username<input value={form.username} onChange={(event) => setForm((value) => ({ ...value, username: event.target.value }))} required /></label>
         <label>Email<input type="email" value={form.email} onChange={(event) => setForm((value) => ({ ...value, email: event.target.value }))} required /></label>
-        <label>Password<input type="password" value={form.password} onChange={(event) => setForm((value) => ({ ...value, password: event.target.value }))} placeholder={mode === 'edit' ? 'Leave empty to keep current' : 'Strong password'} required={mode !== 'edit'} /></label>
+        <label>Password<span className="input-with-icon"><KeyRound size={15} /><input type="password" value={form.password} onChange={(event) => setForm((value) => ({ ...value, password: event.target.value }))} placeholder={mode === 'edit' ? 'Leave empty to keep current' : 'Strong password'} required={mode !== 'edit'} /></span></label>
         <label>Role<select value={form.role} onChange={(event) => setForm((value) => ({ ...value, role: event.target.value }))}><option value="user">User</option><option value="admin">Admin</option></select></label>
-        <label>Subscription<select value={form.subscriptionPlan} onChange={(event) => setForm((value) => ({ ...value, subscriptionPlan: event.target.value }))}><option value="free">Free · 10-minute preview</option><option value="premium">Premium · Full movies</option></select></label>
+        <label>Subscription<span className="input-with-icon"><Crown size={15} /><select value={form.subscriptionPlan} onChange={(event) => setForm((value) => ({ ...value, subscriptionPlan: event.target.value }))}><option value="free">Free · 10-minute preview</option><option value="premium">Premium · Full movies</option></select></span></label>
         <label>Premium expires<input type="date" value={form.subscriptionExpiresAt} disabled={form.subscriptionPlan !== 'premium'} onChange={(event) => setForm((value) => ({ ...value, subscriptionExpiresAt: event.target.value }))} /><small>Leave empty for no expiry.</small></label>
       </div>
       {error ? <p className="form-error">{error}</p> : null}

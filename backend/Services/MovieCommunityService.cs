@@ -10,23 +10,52 @@ public sealed class MovieCommunityService(Database database)
     {
         await using var connection = await database.OpenAsync();
         await using var command = connection.Command("""
-            SELECT e.id, e.movie_id, e.season_number, e.episode_number,
+            SELECT s.season_number, s.title, e.id, e.movie_id, e.episode_number,
                    coalesce(nullif(e.title, ''), m.title), m.slug, m.cover_url, m.duration
-            FROM series_episodes e JOIN movies m ON m.id=e.movie_id
-            WHERE e.series_id=@series
-            ORDER BY e.season_number, e.episode_number
+            FROM series_seasons s
+            LEFT JOIN series_episodes e ON e.series_id=s.series_id AND e.season_number=s.season_number
+            LEFT JOIN movies m ON m.id=e.movie_id
+            WHERE s.series_id=@series
+            ORDER BY s.season_number, e.episode_number
             """, ("series", seriesId));
         await using var reader = await command.ExecuteReaderAsync();
         var seasons = new List<SeriesSeason>();
         while (await reader.ReadAsync())
         {
-            var number = reader.GetInt32(2);
-            if (seasons.Count == 0 || seasons[^1].Number != number) seasons.Add(new(number, []));
-            seasons[^1].Episodes.Add(new(reader.GetGuid(0), reader.GetGuid(1), reader.GetInt32(3),
-                reader.GetString(4), reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6),
-                reader.IsDBNull(7) ? null : reader.GetString(7)));
+            var number = reader.GetInt32(0);
+            if (seasons.Count == 0 || seasons[^1].Number != number)
+                seasons.Add(new(number, reader.IsDBNull(1) ? null : reader.GetString(1), []));
+            if (!reader.IsDBNull(2))
+                seasons[^1].Episodes.Add(new(reader.GetGuid(2), reader.GetGuid(3), reader.GetInt32(4),
+                    reader.GetString(5), reader.GetString(6), reader.IsDBNull(7) ? null : reader.GetString(7),
+                    reader.IsDBNull(8) ? null : reader.GetString(8)));
         }
         return seasons;
+    }
+
+    public async Task AddSeasonAsync(Guid seriesId, SeriesSeasonRequest value)
+    {
+        if (value.SeasonNumber is < 1 or > 100) throw new ApiException("Season must be between 1 and 100.");
+        var title = value.Title?.Trim();
+        if (title?.Length > 200) throw new ApiException("Season title is too long.");
+        await using var connection = await database.OpenAsync();
+        await using var command = connection.Command("""
+            INSERT INTO series_seasons(series_id,season_number,title)
+            SELECT id,@season,@title FROM movies WHERE id=@series AND type='Series'
+            ON CONFLICT DO NOTHING RETURNING season_number
+            """, ("series", seriesId), ("season", value.SeasonNumber), ("title", title));
+        if (await command.ExecuteScalarAsync() is null)
+            throw new ApiException("Could not create season. Check that the series exists and the season number is unused.", 409);
+    }
+
+    public async Task RemoveSeasonAsync(Guid seriesId, int seasonNumber)
+    {
+        await using var connection = await database.OpenAsync();
+        await using var hasEpisodes = connection.Command("SELECT EXISTS(SELECT 1 FROM series_episodes WHERE series_id=@series AND season_number=@season)", ("series", seriesId), ("season", seasonNumber));
+        if ((bool)(await hasEpisodes.ExecuteScalarAsync())!)
+            throw new ApiException("Remove all episodes from this season before deleting it.", 409);
+        await using var command = connection.Command("DELETE FROM series_seasons WHERE series_id=@series AND season_number=@season", ("series", seriesId), ("season", seasonNumber));
+        if (await command.ExecuteNonQueryAsync() == 0) throw new ApiException("Season not found", 404);
     }
 
     public async Task AddEpisodeAsync(Guid seriesId, SeriesEpisodeRequest value)
@@ -38,11 +67,17 @@ public sealed class MovieCommunityService(Database database)
         if (title?.Length > 200) throw new ApiException("Episode title is too long.");
         await using var connection = await database.OpenAsync();
         await using var command = connection.Command("""
-            INSERT INTO series_episodes(series_id,movie_id,season_number,episode_number,title)
-            SELECT s.id, e.id, @season, @episode, @title
-            FROM movies s CROSS JOIN movies e
-            WHERE s.id=@series AND s.type='Series' AND e.id=@movie
-            ON CONFLICT DO NOTHING RETURNING id
+            WITH linked AS (
+              INSERT INTO series_episodes(series_id,movie_id,season_number,episode_number,title)
+              SELECT s.id, e.id, @season, @episode, @title
+              FROM movies s CROSS JOIN movies e
+              WHERE s.id=@series AND s.type='Series' AND e.id=@movie AND e.type<>'Series'
+                AND EXISTS(SELECT 1 FROM series_seasons ss WHERE ss.series_id=s.id AND ss.season_number=@season)
+                AND NOT EXISTS(SELECT 1 FROM series_episodes used WHERE used.movie_id=e.id)
+              ON CONFLICT DO NOTHING RETURNING movie_id
+            )
+            UPDATE movies SET type='Episode',updated_at=now()
+            WHERE id=(SELECT movie_id FROM linked) RETURNING id
             """, ("series", seriesId), ("movie", value.MovieId), ("season", value.SeasonNumber),
             ("episode", value.EpisodeNumber), ("title", title));
         if (await command.ExecuteScalarAsync() is null)
@@ -52,9 +87,12 @@ public sealed class MovieCommunityService(Database database)
     public async Task RemoveEpisodeAsync(Guid seriesId, Guid episodeId)
     {
         await using var connection = await database.OpenAsync();
-        await using var command = connection.Command("DELETE FROM series_episodes WHERE series_id=@series AND id=@id",
+        await using var command = connection.Command("DELETE FROM series_episodes WHERE series_id=@series AND id=@id RETURNING movie_id",
             ("series", seriesId), ("id", episodeId));
-        if (await command.ExecuteNonQueryAsync() == 0) throw new ApiException("Episode not found", 404);
+        var movieId = await command.ExecuteScalarAsync();
+        if (movieId is null) throw new ApiException("Episode not found", 404);
+        await using var restore = connection.Command("UPDATE movies SET type='Movie',updated_at=now() WHERE id=@movie AND NOT EXISTS(SELECT 1 FROM series_episodes WHERE movie_id=@movie)", ("movie", movieId));
+        await restore.ExecuteNonQueryAsync();
     }
 
     public async Task<List<MovieComment>> CommentsAsync(Guid movieId)

@@ -104,6 +104,14 @@ export function addEpisode(seriesId, payload) {
   return api(`/api/admin/series/${seriesId}/episodes`, { method: 'POST', body: JSON.stringify(payload) });
 }
 
+export function addSeason(seriesId, payload) {
+  return api(`/api/admin/series/${seriesId}/seasons`, { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function removeSeason(seriesId, seasonNumber) {
+  return api(`/api/admin/series/${seriesId}/seasons/${seasonNumber}`, { method: 'DELETE' });
+}
+
 export function removeEpisode(seriesId, episodeId) {
   return api(`/api/admin/series/${seriesId}/episodes/${episodeId}`, { method: 'DELETE' });
 }

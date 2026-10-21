@@ -1,7 +1,11 @@
 export const initialMovieForm = {
-  title: '',
+  titleTm: '',
+  titleEn: '',
+  titleRu: '',
   originalTitle: '',
-  description: '',
+  descriptionTm: '',
+  descriptionEn: '',
+  descriptionRu: '',
   year: '2026',
   countries: ['United States'],
   genres: ['Drama'],
@@ -40,9 +44,13 @@ export function cloneUserForm(source = initialUserForm) {
 export function movieToForm(movie) {
   const duration = parseDurationMinutes(movie.duration);
   return {
-    title: movie.title || '',
+    titleTm: movie.titleTm || movie.title || '',
+    titleEn: movie.titleEn || movie.title || '',
+    titleRu: movie.titleRu || movie.title || '',
     originalTitle: movie.originalTitle || movie.title || '',
-    description: movie.description || '',
+    descriptionTm: movie.descriptionTm || movie.description || '',
+    descriptionEn: movie.descriptionEn || movie.description || '',
+    descriptionRu: movie.descriptionRu || movie.description || '',
     year: String(movie.year || new Date().getFullYear()),
     countries: parseCountries(movie.country),
     genres: movie.genres?.length ? movie.genres : ['Drama'],

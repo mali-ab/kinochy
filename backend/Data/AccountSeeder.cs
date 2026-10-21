@@ -4,7 +4,7 @@ public sealed class AccountSeeder(Database database, ILogger<AccountSeeder> logg
 {
     public const string AdminEmail = "admin@example.com";
     public const string AdminPassword = "Salam@123";
-    public const string UserName = "Kinochy User";
+    public const string UserName = "Dilewar User";
     public const string UserEmail = "user@example.com";
     public const string UserPassword = "Salam@123";
 

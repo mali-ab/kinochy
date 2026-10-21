@@ -3,6 +3,7 @@ import AdminMovieDetail from './admin/AdminMovieDetail.jsx';
 import AdminMovieEditor from './admin/AdminMovieEditor.jsx';
 import AdminMoviesList from './admin/AdminMoviesList.jsx';
 import AdminComments from './admin/AdminComments.jsx';
+import AdminDashboard from './admin/AdminDashboard.jsx';
 import AdminShell from './admin/AdminShell.jsx';
 import AdminUserDetail from './admin/AdminUserDetail.jsx';
 import AdminUsersList from './admin/AdminUsersList.jsx';
@@ -20,7 +21,7 @@ export default function App() {
             </AdminShell>
           }
         >
-          <Route index element={<Navigate to="films" replace />} />
+          <Route index element={<AdminDashboard />} />
           <Route path="films" element={<AdminMoviesList type="Movie" />} />
           <Route path="series" element={<AdminMoviesList type="Series" />} />
           <Route path="cartoons" element={<AdminMoviesList type="Cartoon" />} />

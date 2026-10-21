@@ -1,6 +1,6 @@
-# Kinochy
+# Dilewar
 
-Kinochy is a movie-based English learning platform with streaming playback, interactive subtitles, word translation, vocabulary saving, user authentication, and an admin panel for managing movies and subtitle files.
+Dilewar is a movie-based English learning platform with streaming playback, interactive subtitles, word translation, vocabulary saving, user authentication, and an admin panel for managing movies and subtitle files.
 
 ## Stack
 
@@ -82,7 +82,7 @@ JWT_SECRET=your-local-secret \
 dotnet run --project backend/Kinochy.Api.csproj
 ```
 
-Running only the backend provides the JSON API and media endpoints; it does not provide the Kinochy website UI. Uploaded files are kept in `backend/storage/uploads`.
+Running only the backend provides the JSON API and media endpoints; it does not provide the Dilewar website UI. Uploaded files are kept in `backend/storage/uploads`.
 
 ## Run the Full Application Without Docker
 

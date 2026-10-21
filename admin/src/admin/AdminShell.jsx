@@ -1,4 +1,4 @@
-import { Clapperboard, Film, LogOut, MessageSquareText, MonitorPlay, Users } from 'lucide-react';
+import { ChevronRight, CircleCheck, Clapperboard, Database, Film, LayoutDashboard, LogOut, MessageSquareText, MonitorPlay, ShieldCheck, Users } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslations } from 'use-intl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -49,61 +49,68 @@ function AdminChrome({ admin, onLogout, children }) {
   const t = useTranslations();
   const { requestConfirm } = useConfirm();
   const { pathname } = useLocation();
-  const usersActive = pathname.startsWith('/users');
-  const commentsActive = pathname.startsWith('/comments');
+  const navigation = [
+    { to: '/', label: 'Dashboard', detail: 'Platform overview', icon: LayoutDashboard, active: pathname === '/' },
+    { to: '/films', label: 'Films', detail: 'Feature library', icon: Film, active: pathname === '/films' || pathname.startsWith('/movies') },
+    { to: '/series', label: 'Serials', detail: 'Seasons & episodes', icon: MonitorPlay, active: pathname === '/series' },
+    { to: '/cartoons', label: 'Cartoons', detail: 'Animated titles', icon: Clapperboard, active: pathname === '/cartoons' },
+    { to: '/users', label: 'Users', detail: 'Accounts & access', icon: Users, active: pathname.startsWith('/users') },
+    { to: '/comments', label: 'Comments', detail: 'Moderation queue', icon: MessageSquareText, active: pathname.startsWith('/comments') }
+  ];
+  const view = currentView(pathname);
 
   async function logout() {
     await adminLogout();
     onLogout();
   }
 
-  return (
-    <section className="admin-page">
-      <div className="admin-head">
-        <Link to="/" className="admin-brand">
-          <span className="brand-mark">
-            <img src={logo} alt="" width={32} height={32} />
-          </span>
-          <span>
-            <small>{t('admin_signed_in_as')} {admin.email}</small>
-            <strong>Kinochy Admin</strong>
-          </span>
+  return <div className="admin-shell-frame">
+    <header className="admin-topbar">
+      <div className="admin-topbar-inner">
+        <Link to="/" className="admin-brand" aria-label="Dilewar administration home">
+          <span className="brand-mark"><img src={logo} alt="" width={36} height={36} /></span>
+          <span className="admin-brand-copy"><strong>Dilewar</strong><small>Content operations</small></span>
         </Link>
+        <div className="admin-system-state"><span><CircleCheck size={14} /> System online</span><small>Production workspace</small></div>
         <div className="admin-head-actions">
-          <button
-            onClick={() =>
-              requestConfirm({
-                title: 'Log out?',
-                body: 'This will close your admin session.',
-                actionLabel: t('admin_logout'),
-                onConfirm: logout
-              })
-            }
-          >
-            <LogOut size={18} /> {t('admin_logout')}
+          <div className="admin-identity"><span>{admin.username?.slice(0, 1).toUpperCase() || 'A'}</span><div><strong>{admin.username || 'Administrator'}</strong><small>{admin.email}</small></div><ShieldCheck size={17} /></div>
+          <button className="admin-logout" aria-label={t('admin_logout')} onClick={() => requestConfirm({ title: 'Log out?', body: 'This will close your admin session.', actionLabel: t('admin_logout'), onConfirm: logout })}>
+            <LogOut size={18} /><span>{t('admin_logout')}</span>
           </button>
         </div>
       </div>
+      <nav className="admin-primary-nav" aria-label="Admin sections">
+        <div className="admin-primary-nav-inner">
+          {navigation.map((item) => { const Icon = item.icon; return <Link key={item.to} className={item.active ? 'active' : ''} to={item.to} aria-current={item.active ? 'page' : undefined}><Icon size={18} /><span><strong>{item.label}</strong><small>{item.detail}</small></span></Link>; })}
+        </div>
+      </nav>
+    </header>
 
-      <div className="admin-tabs">
-        <Link className={pathname === '/films' ? 'active' : ''} to="/films">
-          <Film size={18} /><span>Films<small>Feature movies</small></span>
-        </Link>
-        <Link className={pathname === '/series' ? 'active' : ''} to="/series">
-          <MonitorPlay size={18} /><span>Serials<small>Seasons and episodes</small></span>
-        </Link>
-        <Link className={pathname === '/cartoons' ? 'active' : ''} to="/cartoons">
-          <Clapperboard size={18} /><span>Cartoons<small>Animated titles</small></span>
-        </Link>
-        <Link className={usersActive ? 'active' : ''} to="/users">
-          <Users size={18} /><span>Users<small>Accounts and access</small></span>
-        </Link>
-        <Link className={commentsActive ? 'active' : ''} to="/comments">
-          <MessageSquareText size={18} /><span>Comments<small>Review discussions</small></span>
-        </Link>
+    <main className="admin-page">
+      <div className="admin-view-context">
+        <div><span className="admin-breadcrumb"><Link to="/">Admin</Link><ChevronRight size={13} />{view.label}</span><h1>{view.title}</h1><p>{view.description}</p></div>
+        <div className="admin-context-badges"><span><Database size={15} /> Live catalog</span><span><ShieldCheck size={15} /> Admin access</span></div>
       </div>
+      <div className="admin-view-content">{children}</div>
+    </main>
 
-      {children}
-    </section>
-  );
+    <footer className="admin-footer">
+      <div className="admin-footer-inner">
+        <div className="admin-footer-brand"><img src={logo} alt="" width={28} height={28} /><span><strong>Dilewar Admin</strong><small>Movies, learning and community in one workspace.</small></span></div>
+        <nav aria-label="Footer navigation">{navigation.map((item) => <Link key={item.to} to={item.to}>{item.label}</Link>)}</nav>
+        <span className="admin-footer-status"><CircleCheck size={14} /> Operational</span>
+      </div>
+    </footer>
+  </div>;
+}
+
+function currentView(pathname) {
+  if (pathname === '/') return { label: 'Dashboard', title: 'Operations dashboard', description: 'Monitor content, members and community activity across Dilewar.' };
+  if (pathname.startsWith('/users')) return { label: 'Users', title: 'People & access', description: 'Manage member accounts, roles, subscriptions and account security.' };
+  if (pathname.startsWith('/comments')) return { label: 'Comments', title: 'Community moderation', description: 'Review conversations and keep discussions useful and respectful.' };
+  if (pathname === '/series') return { label: 'Serials', title: 'Series library', description: 'Build series titles, organize seasons and connect every playable episode.' };
+  if (pathname === '/cartoons') return { label: 'Cartoons', title: 'Cartoon library', description: 'Curate animated stories for every language-learning level.' };
+  if (pathname.startsWith('/movies/new')) return { label: 'New title', title: 'Publish new content', description: 'Add localized metadata, artwork and a playback source to the catalog.' };
+  if (pathname.startsWith('/movies/')) return { label: 'Title workspace', title: 'Content details', description: 'Review playback, metadata, seasons and community activity.' };
+  return { label: 'Films', title: 'Film library', description: 'Manage feature films, metadata, playback qualities and subtitles.' };
 }

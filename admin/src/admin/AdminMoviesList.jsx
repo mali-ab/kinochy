@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Film, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Film, Gauge, Languages, LibraryBig, Plus, Search, SlidersHorizontal, X } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -28,7 +28,7 @@ export default function AdminMoviesList({ type = 'Movie' }) {
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase();
     return movies.filter((movie) => {
-      const searchable = `${movie.title} ${movie.originalTitle || ''} ${movie.year || ''}`.toLocaleLowerCase();
+      const searchable = `${movie.titleTm || ''} ${movie.titleEn || movie.title} ${movie.titleRu || ''} ${movie.originalTitle || ''} ${movie.year || ''}`.toLocaleLowerCase();
       const movieGenres = movie.genres?.length ? movie.genres : [movie.genre];
       return (!term || searchable.includes(term)) && (!genre || movieGenres.includes(genre)) && (!difficulty || (movie.difficulty || 'medium') === difficulty);
     });
@@ -55,6 +55,11 @@ export default function AdminMoviesList({ type = 'Movie' }) {
           <Plus size={18} /> Add title
         </Link>
       </div>
+      <section className="admin-view-metrics" aria-label={`${copy.title} overview`}>
+        <article><span><LibraryBig size={19} /></span><div><strong>{movies.length}</strong><small>Total {copy.title.toLowerCase()}</small></div></article>
+        <article><span><Languages size={19} /></span><div><strong>{movies.filter((movie) => movie.titleTm && movie.titleEn && movie.titleRu).length}</strong><small>Fully localized</small></div></article>
+        <article><span><Gauge size={19} /></span><div><strong>{movies.filter((movie) => movie.fileStatus?.video).length}</strong><small>Playback ready</small></div></article>
+      </section>
       <div className="admin-filter-bar">
         <label className="admin-search-box"><Search size={17} /><input value={search} onChange={(event) => updateFilters({ search: event.target.value, page: 1 })} placeholder={`Search ${copy.title.toLowerCase()}…`} />{search ? <button aria-label="Clear search" onClick={() => updateFilters({ search: '', page: 1 })}><X size={15} /></button> : null}</label>
         <label className="admin-filter-field"><span>Genre</span><select value={genre} onChange={(event) => updateFilters({ genre: event.target.value, page: 1 })}><option value="">All genres</option>{genres.map((item) => <option key={item}>{item}</option>)}</select></label>
