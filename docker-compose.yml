@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -18,7 +20,7 @@ services:
   app:
     build:
       context: .
-      dockerfile: backend/Dockerfile
+      dockerfile: Dockerfile
       args:
         DOTNET_SDK_IMAGE: ${DOTNET_SDK_IMAGE:-mcr.microsoft.com/dotnet/sdk:10.0}
         DOTNET_RUNTIME_IMAGE: ${DOTNET_RUNTIME_IMAGE:-mcr.microsoft.com/dotnet/aspnet:10.0}
@@ -44,19 +46,20 @@ services:
         target: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
         read_only: true
 
-#   edge:
-#     build:
-#       context: .
-#       dockerfile: admin/Dockerfile
-#       args:
-#         NGINX_IMAGE: ${NGINX_IMAGE:-nginx:1.27-alpine}
-#     container_name: kinochy_edge
-#     restart: unless-stopped
-#     depends_on:
-#       - app
-#     ports:
-#       - '4000:80'
+  edge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: admin-runtime
+      args:
+        NGINX_IMAGE: ${NGINX_IMAGE:-nginx:1.27-alpine}
+    container_name: kinochy_edge
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - '4000:80'
 
-# volumes:
-#   postgres_data:
-#   app_storage:
+volumes:
+  postgres_data:
+  app_storage:
