@@ -8,7 +8,7 @@ import { scanMediaLibrary } from '../api/endpoints';
 import { useCountries, useGenres } from '../api/hooks.jsx';
 import { adminMovieQuery } from '../api/queries';
 import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
-import { addQualityUpload, cloneMovieForm, formatFileSize, getPerFileProgress, initialMovieForm, movieQualityOptions, movieToForm, range } from './helpers.js';
+import { addQualityUpload, cloneMovieForm, getPerFileProgress, initialMovieForm, movieQualityOptions, movieToForm, range } from './helpers.js';
 
 /**
  * @param {{ id?: string | null }} props
@@ -44,11 +44,11 @@ export default function AdminMovieEditor({ id = null }) {
 }
 
 function MovieEditor({ movie, initialType, genres, countryOptions = [], onCancel, onSaved }) {
+  const savedQualities = movie?.streaming?.qualities || [];
   const [form, setForm] = useState(() => cloneMovieForm(movie ? movieToForm(movie) : { ...initialMovieForm, type: initialType }));
-  const [sourceType, setSourceType] = useState(movie?.streaming?.hls ? 'hls' : 'video');
+  const [sourceType, setSourceType] = useState('hls');
   const [files, setFiles] = useState({});
-  const [hlsFiles, setHlsFiles] = useState([]);
-  const [qualityUploads, setQualityUploads] = useState(() => (movie?.streaming?.qualities || []).map((quality) => ({ id: `saved-${quality}`, quality, file: null, existing: true })));
+  const [qualityUploads, setQualityUploads] = useState(() => savedQualities.map((quality) => ({ id: `saved-${quality}`, quality, file: null, existing: true })));
   const [libraryPath, setLibraryPath] = useState(() => `/media/user/Новый том/kinochy/${initialType === 'Cartoon' ? 'cartoons' : initialType === 'Series' ? 'serials' : 'films'}`);
   const [libraryScan, setLibraryScan] = useState(null);
   const [serverMediaPath, setServerMediaPath] = useState('');
@@ -103,10 +103,6 @@ function MovieEditor({ movie, initialType, genres, countryOptions = [], onCancel
     event.target.value = '';
     if (!file) return;
     setFiles((value) => ({ ...value, [event.target.name]: file }));
-    if (event.target.name === 'video') {
-      setQualityUploads([]);
-      if (file.name.toLowerCase().endsWith('.zip')) setHlsFiles([]);
-    }
     if (event.target.name === 'subtitleZip') setFiles((value) => ({ ...value, subtitleZip: file, subtitleEn: null, subtitleRu: null }));
     if (event.target.name === 'subtitleEn' || event.target.name === 'subtitleRu') setFiles((value) => ({ ...value, [event.target.name]: file, subtitleZip: null }));
     setProgress((value) => ({ ...value, [event.target.name]: 0 }));
@@ -120,9 +116,7 @@ function MovieEditor({ movie, initialType, genres, countryOptions = [], onCancel
   function changeSource(type) {
     if (type === sourceType) return;
     setSourceType(type);
-    setFiles((value) => ({ ...value, video: null }));
-    setHlsFiles([]);
-    setQualityUploads([]);
+    setQualityUploads(type === 'hls' ? savedQualities.map((quality) => ({ id: `saved-${quality}`, quality, file: null, existing: true })) : []);
     setServerMediaPath('');
     setLibraryScan(null);
     setProgress({});
@@ -137,9 +131,9 @@ function MovieEditor({ movie, initialType, genres, countryOptions = [], onCancel
     setProgress({});
     const missingFiles = [];
     const selectedQualityUploads = qualityUploads.filter((item) => item.file);
+    const removedQualities = savedQualities.filter((quality) => !qualityUploads.some((item) => item.existing && item.quality === quality));
     if (form.type !== 'Series' && sourceType === 'library' && !serverMediaPath) missingFiles.push('a movie folder from the media library');
-    if (form.type !== 'Series' && sourceType !== 'library' && !files.video && selectedQualityUploads.length === 0 && (!currentStatus.video || Boolean(movie?.streaming?.hls) !== (sourceType === 'hls'))) missingFiles.push(sourceType === 'hls' ? 'HLS ZIP, M3U8 playlist, or quality ZIP' : t('admin_movie_file'));
-    if (form.type !== 'Series' && sourceType === 'hls' && files.video && !files.video.name.toLowerCase().endsWith('.zip') && hlsFiles.length === 0) missingFiles.push('HLS segment files');
+    if (form.type !== 'Series' && sourceType === 'hls' && !qualityUploads.some((item) => item.existing || item.file)) missingFiles.push('at least one HLS quality ZIP');
     if (missingFiles.length) {
       setBusy(false);
       setUploadStatus({ phase: 'idle', percent: 0 });
@@ -155,7 +149,7 @@ function MovieEditor({ movie, initialType, genres, countryOptions = [], onCancel
     });
     Object.entries(files).forEach(([key, file]) => file && body.append(key, file));
     if (sourceType === 'library') body.append('serverMediaPath', serverMediaPath);
-    if (sourceType === 'hls' && !files.video?.name.toLowerCase().endsWith('.zip')) hlsFiles.forEach((file) => body.append('hlsFiles', file));
+    if (sourceType === 'hls' && removedQualities.length) body.append('removeQualities', JSON.stringify(removedQualities));
     selectedQualityUploads.forEach((item) => body.append(`quality_${item.quality}`, item.file));
 
     try {
@@ -163,7 +157,7 @@ function MovieEditor({ movie, initialType, genres, countryOptions = [], onCancel
         method: movie ? 'PATCH' : 'POST',
         body,
         onProgress: (value) => {
-          setProgress(getPerFileProgress(value, { ...files, hlsFiles, qualityUploads: selectedQualityUploads.map((item) => item.file) }));
+          setProgress(getPerFileProgress(value, { ...files, qualityUploads: selectedQualityUploads.map((item) => item.file) }));
           setUploadStatus({ phase: value >= 100 ? 'processing' : 'uploading', percent: value });
         }
       });
@@ -178,9 +172,6 @@ function MovieEditor({ movie, initialType, genres, countryOptions = [], onCancel
   }
 
   const currentFiles = movie?.fileNames || {};
-  const currentStatus = movie?.fileStatus || {};
-  const currentSourceMatches = Boolean(movie?.streaming?.hls) === (sourceType === 'hls');
-  const hlsSize = hlsFiles.reduce((total, file) => total + file.size, 0);
 
   async function inspectLibrary() {
     setScanning(true);
@@ -243,10 +234,9 @@ function MovieEditor({ movie, initialType, genres, countryOptions = [], onCancel
       </div>
 
       {form.type !== 'Series' ? <>
-      <div className="admin-editor-section-head"><span className="admin-editor-step">02</span><div><h3>Movie bundle</h3><p>Choose a ready video or upload one ZIP containing the complete adaptive HLS folder tree.</p></div></div>
+      <div className="admin-editor-section-head"><span className="admin-editor-step">02</span><div><h3>HLS movie source</h3><p>Upload a ZIP for each quality, or select a converted HLS folder on the server.</p></div></div>
       <div className="source-switch" role="group" aria-label="Playback source">
-        <button type="button" className={sourceType === 'video' ? 'active' : ''} onClick={() => changeSource('video')} aria-pressed={sourceType === 'video'}><Film size={18} /><span><strong>Video file</strong><small>MP4, WebM or MKV</small></span></button>
-        <button type="button" className={sourceType === 'hls' ? 'active' : ''} onClick={() => changeSource('hls')} aria-pressed={sourceType === 'hls'}><Upload size={18} /><span><strong>HLS bundle</strong><small>ZIP or M3U8 + segments</small></span></button>
+        <button type="button" className={sourceType === 'hls' ? 'active' : ''} onClick={() => changeSource('hls')} aria-pressed={sourceType === 'hls'}><Upload size={18} /><span><strong>HLS quality ZIPs</strong><small>One ZIP for each resolution</small></span></button>
         <button type="button" className={sourceType === 'library' ? 'active' : ''} onClick={() => changeSource('library')} aria-pressed={sourceType === 'library'}><FolderSearch size={18} /><span><strong>Server folder</strong><small>Import converted HLS instantly</small></span></button>
       </div>
       {sourceType === 'library' ? <div className="media-library-import">
@@ -254,17 +244,13 @@ function MovieEditor({ movie, initialType, genres, countryOptions = [], onCancel
         <p>The backend reads this server directory directly. Movies use <code>Title/quality/stream.m3u8</code>. Series use <code>Series/Season 1/Episode 1/quality/stream.m3u8</code>. Put EN/RU subtitles inside each movie or episode folder.</p>
         {libraryScan?.items?.length ? <div className="media-library-results">{libraryScan.items.map((item) => <button type="button" key={item.path} className={serverMediaPath === item.path ? 'selected' : ''} onClick={() => chooseLibraryItem(item)}><span className="media-library-check">{serverMediaPath === item.path ? <Check size={16} /> : <Film size={16} />}</span><span><strong>{item.title}{item.year ? ` (${item.year})` : ''}</strong><small>{item.type}{item.episodes?.length ? ` · ${item.episodes.length} episodes · ${new Set(item.episodes.map((episode) => episode.seasonNumber)).size} seasons` : ` · ${item.qualities.join(', ')} · subtitles: ${item.subtitleLanguages.join(', ') || 'none'}`}</small>{item.episodes?.length ? <span className="media-library-episodes">{item.episodes.map((episode) => <i key={`${episode.seasonNumber}-${episode.episodeNumber}`}>S{episode.seasonNumber} E{episode.episodeNumber} · {episode.qualities.join(', ')}</i>)}</span> : null}{item.warnings.map((warning) => <em key={warning}>{warning}</em>)}</span></button>)}</div> : null}
       </div> : null}
-      {sourceType === 'hls' ? <p className="source-note bundle-note"><strong>Recommended ZIP structure:</strong> master.m3u8 at the root, with quality folders. A single containing folder is also accepted. Keep subtitles in their own ZIP below.</p> : sourceType === 'video' ? <p className="source-note">MP4 with browser-compatible codecs is recommended. The server streams the file as uploaded; it does not transcode it.</p> : null}
-      {sourceType !== 'library' ? <div className="upload-grid">
-        <FileBox icon={<Film />} name="video" label={sourceType === 'hls' ? 'HLS ZIP or main M3U8' : t('admin_movie_file')} accept={sourceType === 'hls' ? '.zip,.m3u8,application/zip,application/vnd.apple.mpegurl' : 'video/mp4,video/webm,video/x-matroska,.mp4,.webm,.mkv'} required={!currentStatus.video || !currentSourceMatches} file={files.video} current={currentSourceMatches ? currentFiles.video : null} progress={progress.video} onChange={updateFile} onRemove={() => removeFile('video')} />
-        {sourceType === 'hls' && !files.video?.name.toLowerCase().endsWith('.zip') ? <div className="hls-file-box"><label htmlFor="hls-files"><Upload size={22} /><span><strong>HLS media files</strong><small>{hlsFiles.length ? `${hlsFiles.length} files · ${formatFileSize(hlsSize)}` : 'Choose all segments and companion playlists'}</small></span></label><input id="hls-files" type="file" multiple accept=".ts,.m4s,.mp4,.aac,.mp3,.vtt,.key,.m3u8" onChange={(event) => { setHlsFiles(Array.from(event.target.files)); event.target.value = ''; }} />{hlsFiles.length ? <div className="hls-file-summary"><span>{hlsFiles.slice(0, 3).map((file) => file.name).join(' · ')}{hlsFiles.length > 3 ? ` · +${hlsFiles.length - 3} more` : ''}</span><button type="button" onClick={() => setHlsFiles([])}>Clear</button></div> : null}{typeof progress.hlsFiles === 'number' && progress.hlsFiles > 0 ? <Progress value={progress.hlsFiles} /> : null}</div> : null}
-      </div> : null}
+      {sourceType === 'hls' ? <p className="source-note bundle-note"><strong>Required:</strong> each ZIP represents one quality and must contain an M3U8 playlist with its media segments. Keep subtitles in their own ZIP below.</p> : null}
       {sourceType === 'hls' ? <div className="quality-upload-panel">
-        <div className="quality-upload-head"><div><strong>Separate quality ZIPs</strong><small>Add one ZIP per resolution. Include an M3U8 playlist, or upload a ZIP containing only ordered TS segments and Dilewar will create it.</small></div><button type="button" disabled={qualityUploads.length >= movieQualityOptions.length} onClick={() => { setFiles((value) => ({ ...value, video: null })); setHlsFiles([]); addQualityUpload(setQualityUploads, qualityUploads); }}><Plus size={16} /> Add quality</button></div>
+        <div className="quality-upload-head"><div><strong>HLS quality ZIPs</strong><small>Add one ZIP per resolution. Include an M3U8 playlist and its media segments.</small></div><button type="button" disabled={qualityUploads.length >= movieQualityOptions.length} onClick={() => addQualityUpload(setQualityUploads, qualityUploads)}><Plus size={16} /> Add quality</button></div>
         {qualityUploads.length ? <div className="quality-upload-list">{qualityUploads.map((item) => <div className="quality-upload-row" key={item.id}>
           <select aria-label="Video quality" value={item.quality} disabled={item.existing} onChange={(event) => setQualityUploads((value) => value.map((entry) => entry.id === item.id ? { ...entry, quality: event.target.value } : entry))}>{movieQualityOptions.map((quality) => <option key={quality} value={quality} disabled={qualityUploads.some((entry) => entry.id !== item.id && entry.quality === quality)}>{quality === '2160p' ? '2160p · 4K' : quality === '1440p' ? '1440p · 2K' : quality}</option>)}</select>
           <label className={item.existing && !item.file ? 'quality-saved' : ''}><Upload size={17} /><span>{item.file ? item.file.name : item.existing ? `${item.quality} uploaded · choose ZIP to replace` : `${item.quality} HLS ZIP`}</span><input type="file" accept=".zip,application/zip" onChange={(event) => { const file = event.target.files[0] || null; setQualityUploads((value) => value.map((entry) => entry.id === item.id ? { ...entry, file } : entry)); event.target.value = ''; }} /></label>
-          {item.existing ? item.file ? <button type="button" className="quality-remove" onClick={() => setQualityUploads((value) => value.map((entry) => entry.id === item.id ? { ...entry, file: null } : entry))}>Cancel</button> : <span className="quality-current">Saved</span> : <button type="button" className="quality-remove" onClick={() => setQualityUploads((value) => value.filter((entry) => entry.id !== item.id))}>Remove</button>}
+          {item.existing && item.file ? <button type="button" className="quality-remove" onClick={() => setQualityUploads((value) => value.map((entry) => entry.id === item.id ? { ...entry, file: null } : entry))}>Cancel</button> : <button type="button" className="quality-remove" onClick={() => setQualityUploads((value) => value.filter((entry) => entry.id !== item.id))}>Remove</button>}
         </div>)}</div> : <p className="quality-upload-empty">Use this when your converter produces separate 360p, 720p, 1080p, or 4K ZIP bundles. Dilewar creates the adaptive master playlist automatically.</p>}
       </div> : null}
       </> : <p className="source-note bundle-note"><strong>Series workflow:</strong> publish the series title first. On its details page, create seasons and then add playable episodes inside each season.</p>}
