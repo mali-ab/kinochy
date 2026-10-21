@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, MessageSquareText, Search, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Film, MessageSquareText, MessagesSquare, Search, Trash2, Users, X } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -57,6 +57,11 @@ export default function AdminComments() {
       <div className="admin-list-head">
         <div><span className="admin-section-kicker">Community moderation</span><h2>Comments</h2><p>{total} comment{total === 1 ? '' : 's'} found</p></div>
       </div>
+      <section className="admin-view-metrics" aria-label="Comment overview">
+        <article><span><MessagesSquare size={19} /></span><div><strong>{total}</strong><small>Matching comments</small></div></article>
+        <article><span><Film size={19} /></span><div><strong>{movies.length}</strong><small>Catalog titles</small></div></article>
+        <article><span><Users size={19} /></span><div><strong>{new Set(items.map((comment) => comment.userId)).size}</strong><small>Authors on this page</small></div></article>
+      </section>
 
       <div className="admin-comment-filters">
         <form onSubmit={submitSearch} className="admin-comment-search">

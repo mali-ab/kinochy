@@ -46,20 +46,22 @@ public sealed record MediaLibraryEpisode(string Path, int SeasonNumber, int Epis
 public sealed record MediaLibraryItem(string Path, string Title, string Type, int? Year, string[] Qualities,
     string[] SubtitleLanguages, string[] Warnings, List<MediaLibraryEpisode> Episodes);
 public sealed record MediaLibraryScan(string Root, List<MediaLibraryItem> Items);
+public sealed record SeriesSeasonRequest(int SeasonNumber, string? Title);
 public sealed record SeriesEpisodeRequest(Guid MovieId, int SeasonNumber, int EpisodeNumber, string? Title);
 public sealed record SeriesEpisode(Guid Id, Guid MovieId, int EpisodeNumber, string Title, string Slug, string? CoverUrl, string? Duration);
-public sealed record SeriesSeason(int Number, List<SeriesEpisode> Episodes);
+public sealed record SeriesSeason(int Number, string? Title, List<SeriesEpisode> Episodes);
 public sealed record MovieRow(Guid Id, string Slug, string Title, string? OriginalTitle, string Description,
     int? Year, string? Country, string? Genre, JsonElement Genres, string Type, string? Duration,
     decimal? Rating, string? Difficulty, string? Accent, string? AgeRating, string? CoverUrl,
-    [property: System.Text.Json.Serialization.JsonIgnore] string VideoPath, DateTime CreatedAt, DateTime UpdatedAt)
+    [property: System.Text.Json.Serialization.JsonIgnore] string VideoPath, DateTime CreatedAt, DateTime UpdatedAt,
+    string TitleTm, string TitleEn, string TitleRu, string DescriptionTm, string DescriptionEn, string DescriptionRu)
 {
     public object Streaming => new
     {
         hls=Path.GetExtension(VideoPath).Equals(".m3u8", StringComparison.OrdinalIgnoreCase),
         qualities=ReadHlsQualities(VideoPath)
     };
-    public object FileStatus => new { video=true, cover=!string.IsNullOrWhiteSpace(CoverUrl), subtitleEn=true, subtitleRu=true };
+    public object FileStatus => new { video=!string.IsNullOrWhiteSpace(VideoPath), cover=!string.IsNullOrWhiteSpace(CoverUrl), subtitleEn=true, subtitleRu=true };
     public object FileNames => new { video=Path.GetFileName(VideoPath), cover=CoverUrl is null?null:Path.GetFileName(CoverUrl), subtitleEn="English subtitles", subtitleRu="Russian subtitles" };
 
     private static string[] ReadHlsQualities(string videoPath)

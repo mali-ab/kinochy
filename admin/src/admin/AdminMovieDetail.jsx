@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { moviePosterFallback } from '../api/client';
 import { deleteAdminComment } from '../api/endpoints';
-import { useAddEpisode, useDeleteMovie, useRemoveEpisode, useSubtitles } from '../api/hooks.jsx';
+import { useAddEpisode, useAddSeason, useDeleteMovie, useRemoveEpisode, useRemoveSeason, useSubtitles } from '../api/hooks.jsx';
 import { adminCommentsQuery, adminMovieQuery, moviesQuery, seasonsQuery } from '../api/queries';
 import MoviePlayer from '../player/MoviePlayer.jsx';
 import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
@@ -53,13 +53,23 @@ export default function AdminMovieDetail({ id }) {
           </button>
         </div>
       </div>
+      <div className="admin-detail-statusbar">
+        <span className={movie.fileStatus?.video ? 'ready' : 'pending'}>{movie.fileStatus?.video ? 'Playback ready' : 'Metadata only'}</span>
+        <span>{movie.streaming?.hls ? 'Adaptive HLS' : movie.fileStatus?.video ? 'Single video' : 'No main video'}</span>
+        <span>{movie.streaming?.qualities?.length ? `${movie.streaming.qualities.length} qualities` : 'Default quality'}</span>
+        <span>Updated {movie.updatedAt ? new Date(movie.updatedAt).toLocaleDateString() : 'recently'}</span>
+      </div>
       <div className="admin-movie-detail">
         <div className="admin-movie-cover" style={{ position: 'relative', overflow: 'hidden', ...(movie.coverUrl ? undefined : { background: moviePosterFallback(movie) }) }}>
           {movie.coverUrl ? <img src={movie.coverUrl} alt={movie.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
         </div>
         <div>
-          <h2>{movie.title}</h2>
-          <p>{movie.description}</p>
+          <h2>{movie.titleEn || movie.title}</h2>
+          <div className="admin-localized-summary">
+            <div><span>TK</span><strong>{movie.titleTm || movie.title}</strong><p>{movie.descriptionTm || movie.description}</p></div>
+            <div><span>EN</span><strong>{movie.titleEn || movie.title}</strong><p>{movie.descriptionEn || movie.description}</p></div>
+            <div><span>RU</span><strong>{movie.titleRu || movie.title}</strong><p>{movie.descriptionRu || movie.description}</p></div>
+          </div>
           <dl className="admin-facts">
             <dt>Type</dt><dd>{movie.type}</dd>
             <dt>Year</dt><dd>{movie.year}</dd>
@@ -70,7 +80,7 @@ export default function AdminMovieDetail({ id }) {
           </dl>
         </div>
       </div>
-      <MoviePlayer movie={movie} subtitles={subtitles} access={{ hasFullAccess: true }} />
+      {movie.fileStatus?.video ? <MoviePlayer movie={movie} subtitles={subtitles} access={{ hasFullAccess: true }} /> : null}
       {movie.type === 'Series' ? <AdminSeriesEpisodes movie={movie} /> : null}
       <AdminMovieComments movie={movie} />
     </div>
@@ -136,19 +146,44 @@ function AdminSeriesEpisodes({ movie }) {
   const seasonsResult = useQuery({ ...seasonsQuery(movie.slug), retry: false });
   const catalogResult = useQuery(moviesQuery(''));
   const seasons = seasonsResult.data ?? [];
-  const catalog = (catalogResult.data ?? []).filter((item) => item.id !== movie.id);
+  const linkedMovieIds = new Set(seasons.flatMap((season) => season.episodes.map((episode) => episode.movieId)));
+  const catalog = (catalogResult.data ?? []).filter((item) => item.id !== movie.id && item.type !== 'Series' && !linkedMovieIds.has(item.id));
+  const addSeasonMutation = useAddSeason(movie.id, movie.slug);
+  const removeSeasonMutation = useRemoveSeason(movie.id, movie.slug);
   const addEpisodeMutation = useAddEpisode(movie.id, movie.slug);
   const removeEpisodeMutation = useRemoveEpisode(movie.id, movie.slug);
-  const [form, setForm] = useState({ movieId: '', seasonNumber: '1', episodeNumber: '1', title: '' });
+  const [seasonForm, setSeasonForm] = useState({ seasonNumber: '1', title: '' });
+  const [episodeForms, setEpisodeForms] = useState({});
   const [error, setError] = useState('');
 
-  function submitAddEpisode(event) {
+  function createSeason(event) {
     event.preventDefault();
     setError('');
-    addEpisodeMutation.mutate(
-      { movieId: form.movieId, seasonNumber: Number(form.seasonNumber), episodeNumber: Number(form.episodeNumber), title: form.title || null },
+    addSeasonMutation.mutate(
+      { seasonNumber: Number(seasonForm.seasonNumber), title: seasonForm.title || null },
       {
-        onSuccess: () => setForm((current) => ({ ...current, movieId: '', episodeNumber: String(Number(current.episodeNumber) + 1), title: '' })),
+        onSuccess: (createdSeasons) => setSeasonForm({ seasonNumber: String(Math.max(0, ...createdSeasons.map((season) => season.number)) + 1), title: '' }),
+        onError: (issue) => setError(issue.message)
+      }
+    );
+  }
+
+  function episodeForm(season) {
+    return episodeForms[season.number] ?? { movieId: '', episodeNumber: String(season.episodes.length + 1), title: '' };
+  }
+
+  function updateEpisodeForm(season, field, value) {
+    setEpisodeForms((current) => ({ ...current, [season.number]: { ...episodeForm(season), ...current[season.number], [field]: value } }));
+  }
+
+  function submitAddEpisode(event, season) {
+    event.preventDefault();
+    const form = episodeForm(season);
+    setError('');
+    addEpisodeMutation.mutate(
+      { movieId: form.movieId, seasonNumber: season.number, episodeNumber: Number(form.episodeNumber), title: form.title || null },
+      {
+        onSuccess: () => setEpisodeForms((current) => ({ ...current, [season.number]: { movieId: '', episodeNumber: String(Number(form.episodeNumber) + 1), title: '' } })),
         onError: (issue) => setError(issue.message)
       }
     );
@@ -159,17 +194,32 @@ function AdminSeriesEpisodes({ movie }) {
     removeEpisodeMutation.mutate(episodeId, { onError: (issue) => setError(issue.message) });
   }
 
+  function removeSeason(seasonNumber) {
+    setError('');
+    removeSeasonMutation.mutate(seasonNumber, { onError: (issue) => setError(issue.message) });
+  }
+
   return <section className="admin-series-panel">
     <h3>Seasons & episodes</h3>
-    <p>Add each playable episode as a movie first, then link it to this series.</p>
-    <form onSubmit={submitAddEpisode}>
-      <label>Season<input type="number" min="1" max="100" required value={form.seasonNumber} onChange={(event) => setForm((current) => ({ ...current, seasonNumber: event.target.value }))} /></label>
-      <label>Episode<input type="number" min="1" max="1000" required value={form.episodeNumber} onChange={(event) => setForm((current) => ({ ...current, episodeNumber: event.target.value }))} /></label>
-      <label>Movie<select required value={form.movieId} onChange={(event) => setForm((current) => ({ ...current, movieId: event.target.value }))}><option value="">Choose a movie</option>{catalog.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
-      <label>Episode title (optional)<input maxLength="200" value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} /></label>
-      <button className="primary" disabled={addEpisodeMutation.isPending || !form.movieId}><Plus size={16} /> Add episode</button>
+    <p>Create a season first, then add playable episode movies inside that season.</p>
+    <form className="admin-season-create" onSubmit={createSeason}>
+      <label>Season number<input type="number" min="1" max="100" required value={seasonForm.seasonNumber} onChange={(event) => setSeasonForm((current) => ({ ...current, seasonNumber: event.target.value }))} /></label>
+      <label>Season title (optional)<input maxLength="200" value={seasonForm.title} onChange={(event) => setSeasonForm((current) => ({ ...current, title: event.target.value }))} /></label>
+      <button className="primary" disabled={addSeasonMutation.isPending}><Plus size={16} /> Create season</button>
     </form>
     {error ? <p className="form-error" role="alert">{error}</p> : null}
-    {seasons.map((season) => <div className="admin-season" key={season.number}><h4>Season {season.number}</h4>{season.episodes.map((episode) => <div key={episode.id}><span>{episode.episodeNumber}. {episode.title}</span><button type="button" onClick={() => removeEpisode(episode.id)} aria-label={`Remove ${episode.title}`}><Trash2 size={15} /> Remove</button></div>)}</div>)}
+    {seasons.map((season) => {
+      const form = episodeForm(season);
+      return <div className="admin-season" key={season.number}>
+        <div className="admin-season-head"><h4>Season {season.number}{season.title ? ` · ${season.title}` : ''}</h4><button type="button" className="danger" disabled={season.episodes.length > 0 || removeSeasonMutation.isPending} onClick={() => removeSeason(season.number)}><Trash2 size={15} /> Delete season</button></div>
+        {season.episodes.map((episode) => <div className="admin-season-episode" key={episode.id}><span>{episode.episodeNumber}. {episode.title}</span><button type="button" onClick={() => removeEpisode(episode.id)} aria-label={`Remove ${episode.title}`}><Trash2 size={15} /> Remove</button></div>)}
+        <form className="admin-episode-create" onSubmit={(event) => submitAddEpisode(event, season)}>
+          <label>Episode<input type="number" min="1" max="1000" required value={form.episodeNumber} onChange={(event) => updateEpisodeForm(season, 'episodeNumber', event.target.value)} /></label>
+          <label>Playable movie<select required value={form.movieId} onChange={(event) => updateEpisodeForm(season, 'movieId', event.target.value)}><option value="">Choose an episode movie</option>{catalog.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
+          <label>Episode title (optional)<input maxLength="200" value={form.title} onChange={(event) => updateEpisodeForm(season, 'title', event.target.value)} /></label>
+          <button className="primary" disabled={addEpisodeMutation.isPending || !form.movieId}><Plus size={16} /> Add episode</button>
+        </form>
+      </div>;
+    })}
   </section>;
 }

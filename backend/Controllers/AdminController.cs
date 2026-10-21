@@ -75,6 +75,22 @@ public sealed class AdminController(Database database,MovieService movies,MovieC
         return StatusCode(201,await community.SeasonsAsync(id));
     }
 
+    [HttpPost("api/admin/series/{id:guid}/seasons")]
+    public async Task<IActionResult> AddSeriesSeason(Guid id,SeriesSeasonRequest value)
+    {
+        RequireAdmin();
+        await community.AddSeasonAsync(id,value);
+        return StatusCode(201,await community.SeasonsAsync(id));
+    }
+
+    [HttpDelete("api/admin/series/{id:guid}/seasons/{seasonNumber:int}")]
+    public async Task<IActionResult> RemoveSeriesSeason(Guid id,int seasonNumber)
+    {
+        RequireAdmin();
+        await community.RemoveSeasonAsync(id,seasonNumber);
+        return NoContent();
+    }
+
     [HttpDelete("api/admin/series/{id:guid}/episodes/{episodeId:guid}")]
     public async Task<IActionResult> RemoveSeriesEpisode(Guid id,Guid episodeId)
     {

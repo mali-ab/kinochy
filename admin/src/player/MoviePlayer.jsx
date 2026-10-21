@@ -793,7 +793,7 @@ export default function MoviePlayer({ movie, subtitles, access }) {
           <div className="subscription-paywall" role="dialog" aria-modal="true" aria-label="Free preview ended">
             <span className="subscription-paywall-icon"><Crown size={28} /></span>
             <p>Free preview ended</p>
-            <h3>Continue watching with Kinochy Premium</h3>
+            <h3>Continue watching with Dilewar Premium</h3>
             <small>You watched the free 10-minute preview. Premium unlocks every movie without limits.</small>
             <a href="/subscription">View subscription</a>
           </div>

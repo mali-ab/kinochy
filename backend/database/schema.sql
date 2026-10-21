@@ -60,6 +60,25 @@ CREATE TABLE IF NOT EXISTS movies (
 );
 
 ALTER TABLE movies ADD COLUMN IF NOT EXISTS genres JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE movies ADD COLUMN IF NOT EXISTS title_tm TEXT;
+ALTER TABLE movies ADD COLUMN IF NOT EXISTS title_en TEXT;
+ALTER TABLE movies ADD COLUMN IF NOT EXISTS title_ru TEXT;
+ALTER TABLE movies ADD COLUMN IF NOT EXISTS description_tm TEXT;
+ALTER TABLE movies ADD COLUMN IF NOT EXISTS description_en TEXT;
+ALTER TABLE movies ADD COLUMN IF NOT EXISTS description_ru TEXT;
+UPDATE movies SET
+  title_tm=coalesce(nullif(title_tm,''),title),
+  title_en=coalesce(nullif(title_en,''),title),
+  title_ru=coalesce(nullif(title_ru,''),title),
+  description_tm=coalesce(description_tm,description),
+  description_en=coalesce(description_en,description),
+  description_ru=coalesce(description_ru,description);
+ALTER TABLE movies ALTER COLUMN title_tm SET NOT NULL;
+ALTER TABLE movies ALTER COLUMN title_en SET NOT NULL;
+ALTER TABLE movies ALTER COLUMN title_ru SET NOT NULL;
+ALTER TABLE movies ALTER COLUMN description_tm SET NOT NULL;
+ALTER TABLE movies ALTER COLUMN description_en SET NOT NULL;
+ALTER TABLE movies ALTER COLUMN description_ru SET NOT NULL;
 ALTER TABLE movies DROP CONSTRAINT IF EXISTS movies_year_integer_range;
 ALTER TABLE movies ADD CONSTRAINT movies_year_integer_range CHECK (year BETWEEN 1888 AND 9999);
 
@@ -171,6 +190,18 @@ CREATE TABLE IF NOT EXISTS series_episodes (
 );
 
 CREATE INDEX IF NOT EXISTS series_episodes_series_idx ON series_episodes(series_id, season_number, episode_number);
+
+CREATE TABLE IF NOT EXISTS series_seasons (
+  series_id UUID NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
+  season_number INTEGER NOT NULL CHECK (season_number BETWEEN 1 AND 100),
+  title TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (series_id, season_number)
+);
+
+INSERT INTO series_seasons(series_id, season_number)
+SELECT DISTINCT series_id, season_number FROM series_episodes
+ON CONFLICT DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS movie_comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
