@@ -14,7 +14,9 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
     public async Task<List<MovieRow>> ListAsync(string? search)
     {
         await using var connection = await database.OpenAsync();
-        var filter = string.IsNullOrWhiteSpace(search) ? "" : " WHERE title_tm ILIKE @search OR title_en ILIKE @search OR title_ru ILIKE @search OR description_tm ILIKE @search OR description_en ILIKE @search OR description_ru ILIKE @search";
+        var filter = string.IsNullOrWhiteSpace(search)
+            ? " WHERE type <> 'Episode'"
+            : " WHERE type <> 'Episode' AND (title_tm ILIKE @search OR title_en ILIKE @search OR title_ru ILIKE @search OR description_tm ILIKE @search OR description_en ILIKE @search OR description_ru ILIKE @search)";
         await using var command = connection.Command($"SELECT {Columns} FROM movies{filter} ORDER BY created_at DESC", ("search", $"%{search}%"));
         return await ReadMany(command);
     }
@@ -30,10 +32,16 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
     {
         await using var connection = await database.OpenAsync();
         await using var command = connection.Command($"""
-            SELECT {Columns} FROM movies
-            WHERE id <> @id
-            ORDER BY (CASE WHEN type=@type THEN 2 ELSE 0 END + CASE WHEN genre=@genre THEN 3 ELSE 0 END) DESC,
-                     rating DESC NULLS LAST, created_at DESC
+            SELECT {string.Join(',', Columns.Split(',').Select(column => "m." + column))}
+            FROM movies m
+            WHERE m.id <> @id
+              AND lower(m.type) <> 'episode'
+              AND NOT EXISTS (
+                  SELECT 1 FROM series_episodes episode
+                  WHERE episode.movie_id = m.id
+              )
+            ORDER BY (CASE WHEN m.type=@type THEN 2 ELSE 0 END + CASE WHEN m.genre=@genre THEN 3 ELSE 0 END) DESC,
+                     m.rating DESC NULLS LAST, m.created_at DESC
             LIMIT 6
             """, ("id", movie.Id), ("type", movie.Type), ("genre", movie.Genre));
         return await ReadMany(command);
@@ -89,7 +97,16 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         if(new[]{titleTm,titleEn,titleRu}.Any(string.IsNullOrWhiteSpace))throw new ApiException("Movie titles are required in Turkmen, English, and Russian.");
         if(new[]{descriptionTm,descriptionEn,descriptionRu}.Any(string.IsNullOrWhiteSpace))throw new ApiException("Movie descriptions are required in Turkmen, English, and Russian.");
         var title=titleEn;
-        var movieType=NormalizeMovieType(form["type"].ToString());
+        var movieType=existingMovie?.Type.Equals("Episode",StringComparison.OrdinalIgnoreCase)==true
+            ? "Episode"
+            : NormalizeMovieType(form["type"].ToString());
+        var seriesIdText=form["seriesId"].ToString();
+        var relationRequested=!string.IsNullOrWhiteSpace(seriesIdText)||!string.IsNullOrWhiteSpace(form["seasonNumber"].ToString())||!string.IsNullOrWhiteSpace(form["episodeNumber"].ToString());
+        var hasSeriesRelation=Guid.TryParse(seriesIdText,out var seriesId);
+        var relationSeason=int.TryParse(form["seasonNumber"].ToString(),out var parsedSeason)?parsedSeason:0;
+        var relationEpisode=int.TryParse(form["episodeNumber"].ToString(),out var parsedEpisode)?parsedEpisode:0;
+        if(relationRequested&&(!hasSeriesRelation||id is not null||relationSeason is < 1 or > 100||relationEpisode is < 1 or > 1000))
+            throw new ApiException("An episode must be a new movie with a valid series, season, and episode number.");
         foreach(var file in form.Files)if(file.Length>UploadMaxBytes)throw new ApiException($"{file.FileName} exceeds the 8 GiB upload limit",413);
         var rejectedVideo=form.Files.GetFile("video");
         var subtitleZip=form.Files.GetFile("subtitleZip");
@@ -133,6 +150,28 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         Guid movieId;
         if(id is null){if(video is null&&!movieType.Equals("Series",StringComparison.Ordinal))throw new ApiException("Video is required");const string sql="""INSERT INTO movies(slug,title,original_title,description,year,country,genre,genres,type,duration,rating,difficulty,accent,age_rating,cover_url,video_path,title_tm,title_en,title_ru,description_tm,description_en,description_ru) VALUES(@slug,@title,@original,@description,@year,@country,@genre,@genres::jsonb,@type,@duration,@rating,@difficulty,@accent,@age,@cover,@video,@titleTm,@titleEn,@titleRu,@descriptionTm,@descriptionEn,@descriptionRu) RETURNING id""";await using var q=connection.Command(sql,("slug",slug),("title",title),("original",form["originalTitle"].ToString()),("description",descriptionEn),("year",year),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",movieType),("duration",form["duration"].ToString()),("rating",ratingValue),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",cover is null?null:"/media/uploads/"+Path.GetFileName(cover)),("video",video??""),("titleTm",titleTm),("titleEn",titleEn),("titleRu",titleRu),("descriptionTm",descriptionTm),("descriptionEn",descriptionEn),("descriptionRu",descriptionRu));movieId=(Guid)(await q.ExecuteScalarAsync())!;}
         else{movieId=id.Value;const string sql="""UPDATE movies SET title=@title,original_title=@original,description=@description,title_tm=@titleTm,title_en=@titleEn,title_ru=@titleRu,description_tm=@descriptionTm,description_en=@descriptionEn,description_ru=@descriptionRu,year=@year,country=@country,genre=@genre,genres=@genres::jsonb,type=@type,duration=@duration,rating=@rating,difficulty=@difficulty,accent=@accent,age_rating=@age,cover_url=coalesce(@cover,cover_url),video_path=coalesce(@video,video_path),updated_at=now() WHERE id=@id""";await using var q=connection.Command(sql,("id",movieId),("title",title),("original",form["originalTitle"].ToString()),("description",descriptionEn),("titleTm",titleTm),("titleEn",titleEn),("titleRu",titleRu),("descriptionTm",descriptionTm),("descriptionEn",descriptionEn),("descriptionRu",descriptionRu),("year",year),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",movieType),("duration",form["duration"].ToString()),("rating",ratingValue),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",cover is null?null:"/media/uploads/"+Path.GetFileName(cover)),("video",video));if(await q.ExecuteNonQueryAsync()==0)throw new ApiException("Movie not found",404);}
+        if(id is not null&&existingMovie?.Type.Equals("Episode",StringComparison.OrdinalIgnoreCase)==true)
+        {
+            await using var episodeTitleCommand=connection.Command("UPDATE series_episodes SET title=@title WHERE movie_id=@movie",("title",title),("movie",movieId));
+            await episodeTitleCommand.ExecuteNonQueryAsync();
+        }
+        if(hasSeriesRelation)
+        {
+            const string relationSql="""
+                WITH linked AS (
+                  INSERT INTO series_episodes(series_id,movie_id,season_number,episode_number,title)
+                  SELECT s.id,@movie,@season,@episode,@title
+                  FROM movies s
+                  WHERE s.id=@series AND s.type='Series'
+                    AND EXISTS(SELECT 1 FROM series_seasons ss WHERE ss.series_id=s.id AND ss.season_number=@season)
+                  ON CONFLICT DO NOTHING RETURNING movie_id
+                )
+                UPDATE movies SET type='Episode',updated_at=now()
+                WHERE id=(SELECT movie_id FROM linked) RETURNING id
+                """;
+            await using var relationCommand=connection.Command(relationSql,("series",seriesId),("movie",movieId),("season",relationSeason),("episode",relationEpisode),("title",title));
+            if(await relationCommand.ExecuteScalarAsync() is null)throw new ApiException("Could not add the episode. Check that the series, season, and episode number are valid.",409);
+        }
         async Task SaveSubtitles(Guid targetId,Dictionary<string,string> sources){foreach(var item in sources){var cues=SubtitleParser.Parse(item.Value);if(cues.Count==0)throw new ApiException($"{item.Key.ToUpperInvariant()} subtitle file has no valid cues.");await using var q=connection.Command("INSERT INTO subtitles(movie_id,language,cues) VALUES(@id,@language,@cues::jsonb) ON CONFLICT(movie_id,language) DO UPDATE SET cues=excluded.cues",("id",targetId),("language",item.Key),("cues",JsonSerializer.Serialize(cues,SubtitleJson)));await q.ExecuteNonQueryAsync();}}
         await SaveSubtitles(movieId,subtitleSources);
         if(libraryImport?.Episodes.Count>0)

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { moviePosterFallback } from '../api/client';
 import { adminCommentsQuery, adminUsersQuery, moviesQuery } from '../api/queries';
+import { movieDetailPath } from './helpers.js';
 
 export default function AdminDashboard() {
   const moviesResult = useQuery(moviesQuery(''));
@@ -49,14 +50,14 @@ export default function AdminDashboard() {
       <section className="dashboard-panel dashboard-activity">
         <DashboardPanelHead kicker="Community" title="Recent activity" link="/comments" />
         <div className="dashboard-activity-list">
-          {comments.length ? comments.map((comment) => <Link to={`/movies/${comment.movieId}`} key={comment.id}><span>{comment.username?.slice(0,1).toUpperCase() || '?'}</span><div><strong>{comment.username}</strong><p>{comment.body}</p><small>{comment.movieTitle} · {new Date(comment.createdAt).toLocaleDateString()}</small></div></Link>) : <div className="dashboard-empty"><Activity size={22} /><span>No recent comments</span></div>}
+          {comments.length ? comments.map((comment) => { const movie = movies.find((item) => item.id === comment.movieId); return <Link to={movie ? movieDetailPath(movie) : `/movies/${comment.movieId}`} key={comment.id}><span>{comment.username?.slice(0,1).toUpperCase() || '?'}</span><div><strong>{comment.username}</strong><p>{comment.body}</p><small>{comment.movieTitle} · {new Date(comment.createdAt).toLocaleDateString()}</small></div></Link>; }) : <div className="dashboard-empty"><Activity size={22} /><span>No recent comments</span></div>}
         </div>
       </section>
 
       <section className="dashboard-panel dashboard-recent">
         <DashboardPanelHead kicker="Library" title="Recently added" link="/films" />
         <div className="dashboard-recent-list">
-          {recent.map((movie) => <Link to={`/movies/${movie.id}`} key={movie.id}>
+          {recent.map((movie) => <Link to={movieDetailPath(movie)} key={movie.id}>
             <span className="dashboard-poster" style={movie.coverUrl ? undefined : { background: moviePosterFallback(movie) }}>{movie.coverUrl ? <img src={movie.coverUrl} alt="" /> : null}</span>
             <div><strong>{movie.titleEn || movie.title}</strong><small>{movie.type} · {movie.year || 'Year unknown'}</small></div>
             <span className={movie.fileStatus?.video ? 'ready' : 'pending'}>{movie.fileStatus?.video ? 'Ready' : 'Metadata'}</span><ArrowUpRight size={16} />

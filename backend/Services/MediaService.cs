@@ -47,6 +47,31 @@ public sealed class MediaService(MovieService movies, IWebHostEnvironment enviro
         return false;
     }
 
+    public async Task<string> FreePreviewPlaylistAsync(Guid id,string assetPath)
+    {
+        var path=await HlsAsync(id,assetPath);
+        if(!Path.GetExtension(path).Equals(".m3u8",StringComparison.OrdinalIgnoreCase))throw new FileNotFoundException();
+        var lines=await File.ReadAllLinesAsync(path);var result=new List<string>();var elapsed=0d;var duration=0d;var segmentPending=false;
+        foreach(var raw in lines)
+        {
+            var line=raw.Trim();
+            if(line.Equals("#EXT-X-ENDLIST",StringComparison.OrdinalIgnoreCase))continue;
+            if(line.StartsWith("#EXTINF:",StringComparison.OrdinalIgnoreCase))
+            {
+                if(!double.TryParse(line[8..].Split(',')[0],System.Globalization.NumberStyles.Float,System.Globalization.CultureInfo.InvariantCulture,out duration))duration=0;
+                if(elapsed>=Kinochy.Api.Models.SubscriptionAccess.FreePreviewSeconds)break;
+                result.Add(raw);segmentPending=true;continue;
+            }
+            if(segmentPending&&line.Length>0&&!line.StartsWith('#'))
+            {
+                result.Add(raw);elapsed+=duration;duration=0;segmentPending=false;continue;
+            }
+            result.Add(raw);
+        }
+        result.Add("#EXT-X-ENDLIST");
+        return string.Join("\n",result)+"\n";
+    }
+
     private string ResolveStoredPath(string storedPath)
     {
         if(File.Exists(storedPath))return storedPath;

@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { deleteAdminComment } from '../api/endpoints';
 import { adminCommentsQuery, moviesQuery, queryKeys } from '../api/queries';
 import { useConfirm } from './confirm.jsx';
+import { movieDetailPath } from './helpers.js';
 
 const PAGE_SIZES = [10, 25, 50, 100];
 
@@ -85,7 +86,7 @@ export default function AdminComments() {
             </div>
             <p>{comment.body}</p>
             <div className="admin-comment-actions">
-              <Link to={`/movies/${comment.movieId}`}><MessageSquareText size={15} /> {comment.movieTitle}</Link>
+              <Link to={movieDetailPath(movies.find((movie) => movie.id === comment.movieId) || { id: comment.movieId })}><MessageSquareText size={15} /> {comment.movieTitle}</Link>
               <button className="danger" disabled={remove.isPending} onClick={() => confirmDelete(comment)}><Trash2 size={16} /> Delete</button>
             </div>
           </article>

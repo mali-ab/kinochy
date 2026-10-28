@@ -31,6 +31,13 @@ export default function App() {
           <Route path="series" element={<AdminMoviesList type="Series" />} />
           <Route path="cartoons" element={<AdminMoviesList type="Cartoon" />} />
           <Route path="movies/new" element={<AdminMovieEditor />} />
+          <Route path="films/:id" element={<MovieDetailRoute />} />
+          <Route path="films/:id/edit" element={<MovieEditorRoute />} />
+          <Route path="series/:id" element={<MovieDetailRoute />} />
+          <Route path="series/:id/edit" element={<MovieEditorRoute />} />
+          <Route path="cartoons/:id" element={<MovieDetailRoute />} />
+          <Route path="cartoons/:id/edit" element={<MovieEditorRoute />} />
+          {/* Backward-compatible routes for existing bookmarks. */}
           <Route path="movies/:id" element={<MovieDetailRoute />} />
           <Route path="movies/:id/edit" element={<MovieEditorRoute />} />
           <Route path="users" element={<AdminUsersList />} />

@@ -51,9 +51,9 @@ function AdminChrome({ admin, onLogout, children }) {
   const { pathname } = useLocation();
   const navigation = [
     { to: '/', label: 'Dashboard', detail: 'Platform overview', icon: LayoutDashboard, active: pathname === '/' },
-    { to: '/films', label: 'Films', detail: 'Feature library', icon: Film, active: pathname === '/films' || pathname.startsWith('/movies') },
-    { to: '/series', label: 'Serials', detail: 'Seasons & episodes', icon: MonitorPlay, active: pathname === '/series' },
-    { to: '/cartoons', label: 'Cartoons', detail: 'Animated titles', icon: Clapperboard, active: pathname === '/cartoons' },
+    { to: '/films', label: 'Films', detail: 'Feature library', icon: Film, active: pathname === '/films' || pathname.startsWith('/films/') },
+    { to: '/series', label: 'Serials', detail: 'Seasons & episodes', icon: MonitorPlay, active: pathname === '/series' || pathname.startsWith('/series/') },
+    { to: '/cartoons', label: 'Cartoons', detail: 'Animated titles', icon: Clapperboard, active: pathname === '/cartoons' || pathname.startsWith('/cartoons/') },
     { to: '/users', label: 'Users', detail: 'Accounts & access', icon: Users, active: pathname.startsWith('/users') },
     { to: '/comments', label: 'Comments', detail: 'Moderation queue', icon: MessageSquareText, active: pathname.startsWith('/comments') }
   ];
@@ -108,8 +108,9 @@ function currentView(pathname) {
   if (pathname === '/') return { label: 'Dashboard', title: 'Operations dashboard', description: 'Monitor content, members and community activity across Dilewar.' };
   if (pathname.startsWith('/users')) return { label: 'Users', title: 'People & access', description: 'Manage member accounts, roles, subscriptions and account security.' };
   if (pathname.startsWith('/comments')) return { label: 'Comments', title: 'Community moderation', description: 'Review conversations and keep discussions useful and respectful.' };
-  if (pathname === '/series') return { label: 'Serials', title: 'Series library', description: 'Build series titles, organize seasons and connect every playable episode.' };
-  if (pathname === '/cartoons') return { label: 'Cartoons', title: 'Cartoon library', description: 'Curate animated stories for every language-learning level.' };
+  if (pathname === '/series' || pathname.startsWith('/series/')) return { label: 'Serials', title: 'Series library', description: 'Build series titles, organize seasons and connect every playable episode.' };
+  if (pathname === '/cartoons' || pathname.startsWith('/cartoons/')) return { label: 'Cartoons', title: 'Cartoon library', description: 'Curate animated stories for every language-learning level.' };
+  if (pathname === '/films' || pathname.startsWith('/films/')) return { label: 'Films', title: 'Film library', description: 'Manage feature films, metadata, playback qualities and subtitles.' };
   if (pathname.startsWith('/movies/new')) return { label: 'New title', title: 'Publish new content', description: 'Add localized metadata, artwork and a playback source to the catalog.' };
   if (pathname.startsWith('/movies/')) return { label: 'Title workspace', title: 'Content details', description: 'Review playback, metadata, seasons and community activity.' };
   return { label: 'Films', title: 'Film library', description: 'Manage feature films, metadata, playback qualities and subtitles.' };

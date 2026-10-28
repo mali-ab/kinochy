@@ -29,6 +29,16 @@ export const initialUserForm = {
 
 export const movieQualityOptions = ['144p', '240p', '360p', '480p', '720p', '1080p', '1440p', '2160p'];
 
+export function movieSection(type) {
+  if (type === 'Cartoon' || type === 'Animation') return 'cartoons';
+  if (type === 'Series') return 'series';
+  return 'films';
+}
+
+export function movieDetailPath(movie) {
+  return `/${movieSection(movie?.type)}/${movie.id}`;
+}
+
 export function cloneMovieForm(source = initialMovieForm) {
   return {
     ...source,
@@ -54,7 +64,7 @@ export function movieToForm(movie) {
     year: String(movie.year || new Date().getFullYear()),
     countries: parseCountries(movie.country),
     genres: movie.genres?.length ? movie.genres : ['Drama'],
-    type: movie.type === 'Animation' ? 'Cartoon' : movie.type || 'Movie',
+    type: movie.type === 'Animation' ? 'Cartoon' : movie.type === 'Episode' ? 'Movie' : movie.type || 'Movie',
     durationHours: String(Math.floor(duration / 60)),
     durationMinutes: String(duration % 60),
     rating: String(movie.rating || '8.0'),

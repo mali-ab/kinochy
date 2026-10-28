@@ -88,7 +88,10 @@ export default function MoviePlayer({ movie, subtitles, access }) {
   const liveOverlayActive = showLiveSubtitles && Boolean((realtimeEnglish && activeEnglish) || (realtimeRussian && activeRussian));
   const fontFamily = fontMap[subtitleStyle.font] || fontMap.Museo;
   const videoSource = useMemo(() => withBasePath(`/media/movies/${movie.id}/video`), [movie.id]);
-  const hlsSource = useMemo(() => withBasePath(`/media/movies/${movie.id}/playlist.m3u8`), [movie.id]);
+  const hlsSource = useMemo(() => {
+    const version = encodeURIComponent(movie.updatedAt || 'current');
+    return withBasePath(`/media/movies/${movie.id}/playlist.m3u8?v=${version}`);
+  }, [movie.id, movie.updatedAt]);
   const prefersHls = Boolean(movie.streaming?.hls);
   const hasFullAccess = Boolean(access?.hasFullAccess);
   const previewSeconds = Number(access?.previewSeconds || 600);
@@ -154,6 +157,14 @@ export default function MoviePlayer({ movie, subtitles, access }) {
         });
         hls.on(Hls.Events.ERROR, (_event, data) => {
           if (!data?.fatal) return;
+          if (!hasFullAccess && video.currentTime >= previewSeconds - 1) {
+            video.pause();
+            setCurrentTime(previewSeconds);
+            setPreviewEnded(true);
+            setPlaybackError('');
+            finishBuffering();
+            return;
+          }
           hls.destroy();
           hlsRef.current = null;
           setPlaybackError('This HLS stream could not be played. Check the playlist and media segments.');
@@ -508,6 +519,12 @@ export default function MoviePlayer({ movie, subtitles, access }) {
   function restoreProgress(video) {
     if (!video || resumeAppliedRef.current) return;
     resumeAppliedRef.current = true;
+    if (!hasFullAccess) {
+      clearMovieProgress(movie.id);
+      video.currentTime = 0;
+      setCurrentTime(0);
+      return;
+    }
     const saved = readSavedProgress(movie.id);
     if (!saved || saved < 3) return;
     const total = video.duration;
@@ -516,7 +533,7 @@ export default function MoviePlayer({ movie, subtitles, access }) {
   }
 
   function rememberProgress(time, total) {
-    if (!movie?.id || !Number.isFinite(time)) return;
+    if (!movie?.id || !Number.isFinite(time) || !hasFullAccess) return;
     const now = Date.now();
     if (now - progressSaveRef.current < 1800) return;
     progressSaveRef.current = now;
@@ -729,10 +746,17 @@ export default function MoviePlayer({ movie, subtitles, access }) {
           onStalled={(event) => {
             if (!event.currentTarget.paused || playRequested) beginBuffering(event.currentTarget);
           }}
-          onError={() => {
+          onError={(event) => {
             clearPlaybackTimers();
             setPlayRequested(false);
             setVideoLoading(false);
+            if (!hasFullAccess && event.currentTarget.currentTime >= previewSeconds - 1) {
+              event.currentTarget.pause();
+              setCurrentTime(previewSeconds);
+              setPreviewEnded(true);
+              setPlaybackError('');
+              return;
+            }
             setPlaybackError('This video could not be played. Check its format and media files.');
           }}
           onCanPlay={finishBuffering}

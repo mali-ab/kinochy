@@ -6,6 +6,7 @@ import { moviePosterFallback } from '../api/client';
 import { moviesQuery } from '../api/queries';
 import { translateDifficulty, useLocale } from '../ui/locale.jsx';
 import { AdminRowsSkeleton } from '../ui/skeleton.jsx';
+import { movieDetailPath } from './helpers.js';
 
 const typeCopy = {
   Movie: { title: 'Films', singular: 'film', empty: 'film' },
@@ -70,7 +71,7 @@ export default function AdminMoviesList({ type = 'Movie' }) {
 
       {isPending ? <AdminRowsSkeleton rows={7} /> : visible.length ? <div className="admin-movie-list">
         {visible.map((movie) => (
-          <Link key={movie.id} className="admin-movie-row" to={`/movies/${movie.id}`}>
+          <Link key={movie.id} className="admin-movie-row" to={movieDetailPath(movie)}>
             <span className="admin-row-cover" style={{ position: 'relative', overflow: 'hidden', ...(movie.coverUrl ? undefined : { background: moviePosterFallback(movie) }) }}>
               {movie.coverUrl ? <img src={movie.coverUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} /> : null}
             </span>

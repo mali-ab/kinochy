@@ -34,6 +34,12 @@ builder.Services.AddSingleton<PreloadedMediaSeeder>();
 var app = builder.Build();
 app.UseMiddleware<ErrorMiddleware>();
 app.UseCors();
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api"))
+        context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+    await next();
+});
 
 Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "storage", "uploads"));
 await app.Services.GetRequiredService<Database>().InitializeAsync();

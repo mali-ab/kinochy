@@ -3576,12 +3576,31 @@ body {
 .admin-series-panel > p { color: #9eb4be; }
 .admin-series-panel form { display: grid; align-items: end; gap: 10px; }
 .admin-series-panel .admin-season-create { grid-template-columns: 140px minmax(200px,1fr) auto; }
-.admin-series-panel .admin-episode-create { grid-template-columns: 100px minmax(200px,1fr) minmax(200px,1fr) auto; padding-top: 12px; border-top: 1px solid rgba(173,215,226,.1); }
+.admin-series-panel .admin-episode-create { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 12px; border-top: 1px solid rgba(173,215,226,.1); }
+.admin-series-panel .admin-episode-create > div { display: grid; gap: 4px; }
+.admin-series-panel .admin-episode-create small { color: #9eb4be; }
 .admin-series-panel label { display: grid; gap: 7px; color: #cad9de; font-size: 12px; font-weight: 800; }
 .admin-series-panel input, .admin-series-panel select { width: 100%; min-height: 43px; padding: 0 10px; border: 1px solid rgba(173,215,226,.18); border-radius: 8px; color: #f3f8fa; background: #0f1b22; }
 .admin-series-panel .primary { min-height: 43px; white-space: nowrap; }
 .admin-season { display: grid; gap: 8px; padding-top: 14px; border-top: 1px solid rgba(173,215,226,.12); }
 .admin-season > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 12px; border-radius: 8px; background: #20323b; }
+.admin-season-episode > div { display: flex; align-items: center; gap: 10px; }
+.admin-season-episode a { display: inline-flex; align-items: center; gap: 6px; color: #8ee8f7; text-decoration: none; }
+.admin-season .episode-watch { color: #8ee8f7; }
+.admin-episode-preview { width: 100%; margin-top: 16px; border: 1px solid rgba(142,232,247,.25); border-radius: 16px; box-shadow: 0 18px 50px rgba(0,0,0,.28); background: #0f1b22; }
+.admin-episode-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.admin-episode-preview-head { padding: 15px 18px; border-bottom: 1px solid rgba(173,215,226,.14); border-radius: 16px 16px 0 0; background: #17252d; }
+.admin-episode-preview-head > div { display: grid; gap: 3px; }
+.admin-episode-preview-head span { color: #8ee8f7; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.admin-episode-preview-head small { color: #9eb4be; }
+.admin-episode-preview-head button { display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px; border: 1px solid rgba(173,215,226,.16); border-radius: 8px; color: #cad9de; background: #20323b; cursor: pointer; }
+.admin-episode-preview-body { min-height: 300px; padding: 18px 18px 40px; }
+.admin-episode-preview-body .player-shell { width: 100%; margin: 0 auto; border-radius: 12px; overflow: hidden; box-shadow: 0 18px 50px rgba(0,0,0,.36); }
+.episode-subtitle-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.episode-title-field { padding: 16px; border: 1px solid rgba(173,215,226,.16); border-radius: 12px; background: #17252d; }
+.episode-title-field label { display: grid; gap: 8px; color: #e2e8f0; font-size: 13px; font-weight: 800; }
+.episode-title-field input { min-height: 46px; padding: 0 13px; border: 1px solid rgba(173,215,226,.2); border-radius: 8px; color: #f8fafc; background: #0f1b22; }
+@media (max-width: 700px) { .admin-episode-preview-head small { display: none; } .admin-episode-preview-body { padding: 8px 8px 24px; } .episode-subtitle-grid { grid-template-columns: 1fr; } }
 .admin-season button { display: inline-flex; align-items: center; gap: 6px; border: 0; color: #ffb2b2; background: transparent; cursor: pointer; }
 .admin-season .admin-season-head { background: rgba(6,182,212,.08); }
 .admin-season .admin-season-head h4 { color: #e6fbff; }

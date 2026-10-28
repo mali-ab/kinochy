@@ -1,15 +1,15 @@
-import { ChevronLeft, ChevronRight, Edit3, MessageSquareText, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit3, MessageSquareText, Play, Plus, Trash2, X } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { moviePosterFallback } from '../api/client';
 import { deleteAdminComment } from '../api/endpoints';
-import { useAddEpisode, useAddSeason, useDeleteMovie, useRemoveEpisode, useRemoveSeason, useSubtitles } from '../api/hooks.jsx';
-import { adminCommentsQuery, adminMovieQuery, moviesQuery, seasonsQuery } from '../api/queries';
+import { useAddSeason, useDeleteMovie, useRemoveEpisode, useRemoveSeason, useSubtitles } from '../api/hooks.jsx';
+import { adminCommentsQuery, adminMovieQuery, seasonsQuery } from '../api/queries';
 import MoviePlayer from '../player/MoviePlayer.jsx';
 import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
 import { useConfirm } from './confirm.jsx';
-import { formatDuration } from './helpers.js';
+import { formatDuration, movieDetailPath, movieSection } from './helpers.js';
 import { AdminDetailSkeleton } from '../ui/skeleton.jsx';
 
 export default function AdminMovieDetail({ id }) {
@@ -32,9 +32,9 @@ export default function AdminMovieDetail({ id }) {
   return (
     <div className="admin-detail">
       <div className="admin-detail-head">
-        <button onClick={() => navigate('/')}>Back</button>
+        <button onClick={() => navigate(`/${movieSection(movie.type)}`)}>Back</button>
         <div className="admin-actions">
-          <Link to={`/movies/${movie.id}/edit`}>
+          <Link to={`${movieDetailPath(movie)}/edit`}>
             <Edit3 size={16} /> Edit
           </Link>
           <button
@@ -56,7 +56,7 @@ export default function AdminMovieDetail({ id }) {
       <div className="admin-detail-statusbar">
         <span className={movie.fileStatus?.video ? 'ready' : 'pending'}>{movie.fileStatus?.video ? 'Playback ready' : 'Metadata only'}</span>
         <span>{movie.streaming?.hls ? 'Adaptive HLS' : movie.fileStatus?.video ? 'Single video' : 'No main video'}</span>
-        <span>{movie.streaming?.qualities?.length ? `${movie.streaming.qualities.length} qualities` : 'Default quality'}</span>
+        <span>{movie.streaming?.qualities?.length ? movie.streaming.qualities.join(' · ') : 'Default quality'}</span>
         <span>Updated {movie.updatedAt ? new Date(movie.updatedAt).toLocaleDateString() : 'recently'}</span>
       </div>
       <div className="admin-movie-detail">
@@ -144,16 +144,12 @@ function AdminMovieComments({ movie }) {
 
 function AdminSeriesEpisodes({ movie }) {
   const seasonsResult = useQuery({ ...seasonsQuery(movie.slug), retry: false });
-  const catalogResult = useQuery(moviesQuery(''));
   const seasons = seasonsResult.data ?? [];
-  const linkedMovieIds = new Set(seasons.flatMap((season) => season.episodes.map((episode) => episode.movieId)));
-  const catalog = (catalogResult.data ?? []).filter((item) => item.id !== movie.id && item.type !== 'Series' && !linkedMovieIds.has(item.id));
   const addSeasonMutation = useAddSeason(movie.id, movie.slug);
   const removeSeasonMutation = useRemoveSeason(movie.id, movie.slug);
-  const addEpisodeMutation = useAddEpisode(movie.id, movie.slug);
   const removeEpisodeMutation = useRemoveEpisode(movie.id, movie.slug);
   const [seasonForm, setSeasonForm] = useState({ seasonNumber: '1', title: '' });
-  const [episodeForms, setEpisodeForms] = useState({});
+  const [previewEpisodeId, setPreviewEpisodeId] = useState(null);
   const [error, setError] = useState('');
 
   function createSeason(event) {
@@ -163,27 +159,6 @@ function AdminSeriesEpisodes({ movie }) {
       { seasonNumber: Number(seasonForm.seasonNumber), title: seasonForm.title || null },
       {
         onSuccess: (createdSeasons) => setSeasonForm({ seasonNumber: String(Math.max(0, ...createdSeasons.map((season) => season.number)) + 1), title: '' }),
-        onError: (issue) => setError(issue.message)
-      }
-    );
-  }
-
-  function episodeForm(season) {
-    return episodeForms[season.number] ?? { movieId: '', episodeNumber: String(season.episodes.length + 1), title: '' };
-  }
-
-  function updateEpisodeForm(season, field, value) {
-    setEpisodeForms((current) => ({ ...current, [season.number]: { ...episodeForm(season), ...current[season.number], [field]: value } }));
-  }
-
-  function submitAddEpisode(event, season) {
-    event.preventDefault();
-    const form = episodeForm(season);
-    setError('');
-    addEpisodeMutation.mutate(
-      { movieId: form.movieId, seasonNumber: season.number, episodeNumber: Number(form.episodeNumber), title: form.title || null },
-      {
-        onSuccess: () => setEpisodeForms((current) => ({ ...current, [season.number]: { movieId: '', episodeNumber: String(Number(form.episodeNumber) + 1), title: '' } })),
         onError: (issue) => setError(issue.message)
       }
     );
@@ -201,7 +176,7 @@ function AdminSeriesEpisodes({ movie }) {
 
   return <section className="admin-series-panel">
     <h3>Seasons & episodes</h3>
-    <p>Create a season first, then add playable episode movies inside that season.</p>
+    <p>Create a season first, then create each playable episode directly inside that season.</p>
     <form className="admin-season-create" onSubmit={createSeason}>
       <label>Season number<input type="number" min="1" max="100" required value={seasonForm.seasonNumber} onChange={(event) => setSeasonForm((current) => ({ ...current, seasonNumber: event.target.value }))} /></label>
       <label>Season title (optional)<input maxLength="200" value={seasonForm.title} onChange={(event) => setSeasonForm((current) => ({ ...current, title: event.target.value }))} /></label>
@@ -209,17 +184,33 @@ function AdminSeriesEpisodes({ movie }) {
     </form>
     {error ? <p className="form-error" role="alert">{error}</p> : null}
     {seasons.map((season) => {
-      const form = episodeForm(season);
+      const nextEpisode = Math.max(0, ...season.episodes.map((episode) => episode.episodeNumber)) + 1;
+      const episodeParams = new URLSearchParams({ type: 'Movie', seriesId: movie.id, seriesSlug: movie.slug, seriesTitle: movie.titleEn || movie.title, seasonNumber: String(season.number), episodeNumber: String(nextEpisode) });
       return <div className="admin-season" key={season.number}>
         <div className="admin-season-head"><h4>Season {season.number}{season.title ? ` · ${season.title}` : ''}</h4><button type="button" className="danger" disabled={season.episodes.length > 0 || removeSeasonMutation.isPending} onClick={() => removeSeason(season.number)}><Trash2 size={15} /> Delete season</button></div>
-        {season.episodes.map((episode) => <div className="admin-season-episode" key={episode.id}><span>{episode.episodeNumber}. {episode.title}</span><button type="button" onClick={() => removeEpisode(episode.id)} aria-label={`Remove ${episode.title}`}><Trash2 size={15} /> Remove</button></div>)}
-        <form className="admin-episode-create" onSubmit={(event) => submitAddEpisode(event, season)}>
-          <label>Episode<input type="number" min="1" max="1000" required value={form.episodeNumber} onChange={(event) => updateEpisodeForm(season, 'episodeNumber', event.target.value)} /></label>
-          <label>Playable movie<select required value={form.movieId} onChange={(event) => updateEpisodeForm(season, 'movieId', event.target.value)}><option value="">Choose an episode movie</option>{catalog.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
-          <label>Episode title (optional)<input maxLength="200" value={form.title} onChange={(event) => updateEpisodeForm(season, 'title', event.target.value)} /></label>
-          <button className="primary" disabled={addEpisodeMutation.isPending || !form.movieId}><Plus size={16} /> Add episode</button>
-        </form>
+        {season.episodes.map((episode) => {
+          const editParams = new URLSearchParams({ returnTo: `/series/${movie.id}`, seriesSlug: movie.slug });
+          return <div className="admin-season-episode" key={episode.id}><span>{episode.episodeNumber}. {episode.title}</span><div><button type="button" className="episode-watch" onClick={() => setPreviewEpisodeId(episode.movieId)}><Play size={15} /> Test player</button><Link to={`/movies/${episode.movieId}/edit?${editParams}`}><Edit3 size={15} /> Edit</Link><button type="button" onClick={() => removeEpisode(episode.id)} aria-label={`Remove ${episode.title}`}><Trash2 size={15} /> Remove</button></div></div>;
+        })}
+        <div className="admin-episode-create"><div><strong>Next: episode {nextEpisode}</strong><small>Upload HLS quality bundles and episode subtitles.</small></div><Link className="primary" to={`/movies/new?${episodeParams}`}><Plus size={16} /> Add episode movie</Link></div>
       </div>;
     })}
+    {previewEpisodeId ? <EpisodeTestPlayer movieId={previewEpisodeId} onClose={() => setPreviewEpisodeId(null)} /> : null}
   </section>;
+}
+
+function EpisodeTestPlayer({ movieId, onClose }) {
+  const movieResult = useQuery({ ...adminMovieQuery(movieId), retry: false });
+  const movie = movieResult.data ?? null;
+  const { subtitles, ready: subtitlesReady } = useSubtitles(movie?.slug);
+
+  return <section className="admin-episode-preview" aria-label="Episode test player">
+      <div className="admin-episode-preview-head">
+        <div><span>Episode test player</span><strong>{movie?.titleEn || movie?.title || 'Loading episode…'}</strong>{movie ? <small>{movie.streaming?.qualities?.length ? movie.streaming.qualities.join(' · ') : 'Default quality'} · Full admin access</small> : null}</div>
+        <button type="button" onClick={onClose} aria-label="Close episode player"><X size={18} /> Close</button>
+      </div>
+      <div className="admin-episode-preview-body">
+        {movieResult.isPending || !subtitlesReady ? <div className="status">Loading episode player...</div> : movieResult.error || !movie ? <p className="form-error">The episode could not be loaded.</p> : movie.fileStatus?.video ? <MoviePlayer movie={movie} subtitles={subtitles} access={{ hasFullAccess: true }} /> : <p className="form-error">This episode has no playable video.</p>}
+      </div>
+    </section>;
 }
