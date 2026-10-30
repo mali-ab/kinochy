@@ -13,6 +13,22 @@ using Microsoft.Extensions.Primitives;
 using Kinochy.Api.Controllers;
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.OpenApi;
+using Swashbuckle.AspNetCore.Swagger;
+
+var swaggerServices=new ServiceCollection();
+swaggerServices.AddLogging();
+swaggerServices.AddSingleton<IWebHostEnvironment>(new TestEnvironment(Path.GetTempPath()));
+swaggerServices.AddControllers().AddApplicationPart(typeof(MoviesController).Assembly);
+swaggerServices.AddSwaggerGen(options=>options.SwaggerDoc("v1",new OpenApiInfo { Title="Kinochy API",Version="v1" }));
+using(var swaggerProvider=swaggerServices.BuildServiceProvider())
+{
+    var document=swaggerProvider.GetRequiredService<ISwaggerProvider>().GetSwagger("v1");
+    if(!document.Paths.ContainsKey("/api/catalog")||!document.Paths.ContainsKey("/media/movies/{id}/playlist.m3u8"))
+        throw new Exception("Swagger must include catalog and HLS playback endpoints.");
+}
+Console.WriteLine("PASS: Swagger document includes catalog and HLS playback endpoints");
 
 static void Check(bool condition,string message)
 {

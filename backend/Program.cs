@@ -2,6 +2,7 @@ using Kinochy.Api.Data;
 using Kinochy.Api.Infrastructure;
 using Kinochy.Api.Services;
 using Microsoft.AspNetCore.Http.Features;
+using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddEnvironmentVariables();
@@ -10,6 +11,8 @@ builder.Services.Configure<FormOptions>(options => options.MultipartBodyLengthLi
 
 builder.Services.AddControllers().AddJsonOptions(options =>
     options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase);
+builder.Services.AddSwaggerGen(options =>
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "Kinochy API", Version = "v1" }));
 builder.Services.AddHttpClient<TranslationService>();
 builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
 {
@@ -33,6 +36,8 @@ builder.Services.AddSingleton<PreloadedMediaSeeder>();
 
 var app = builder.Build();
 app.UseMiddleware<ErrorMiddleware>();
+app.UseSwagger();
+app.UseSwaggerUI(options => options.SwaggerEndpoint("v1/swagger.json", "Kinochy API v1"));
 app.UseCors();
 app.Use(async (context, next) =>
 {
