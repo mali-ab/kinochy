@@ -35,6 +35,8 @@ FROM ${DOTNET_RUNTIME_IMAGE} AS runtime
 WORKDIR /app
 COPY --from=backend-build /publish ./
 
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -r /var/lib/apt/lists/*
+
 RUN mkdir -p storage/uploads
 
 EXPOSE 4000

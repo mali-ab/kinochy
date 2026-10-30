@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS movies (
 );
 
 ALTER TABLE movies ADD COLUMN IF NOT EXISTS genres JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE movies ADD COLUMN IF NOT EXISTS is_series BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE movies ADD COLUMN IF NOT EXISTS title_tm TEXT;
 ALTER TABLE movies ADD COLUMN IF NOT EXISTS title_en TEXT;
 ALTER TABLE movies ADD COLUMN IF NOT EXISTS title_ru TEXT;
@@ -141,6 +142,11 @@ WHERE movie.id=normalized.id AND movie.genres IS DISTINCT FROM normalized.value;
 UPDATE movies SET genre='Cartoon' WHERE lower(genre) IN ('animation','анимация','animasiýa','cartoon','мультфильм','multfilm');
 DELETE FROM genres WHERE name='Animation';
 
+-- Preserve existing serials after their genre aliases have been normalized.
+UPDATE movies SET is_series=true, type=CASE
+  WHEN genre='Cartoon' OR genres @> '["Cartoon"]'::jsonb THEN 'Cartoon'
+  ELSE 'Movie' END WHERE lower(type)='series';
+
 CREATE TABLE IF NOT EXISTS countries (
   code TEXT PRIMARY KEY,
   name TEXT UNIQUE NOT NULL
@@ -202,6 +208,22 @@ CREATE TABLE IF NOT EXISTS series_seasons (
 INSERT INTO series_seasons(series_id, season_number)
 SELECT DISTINCT series_id, season_number FROM series_episodes
 ON CONFLICT DO NOTHING;
+
+UPDATE movies SET is_series=true WHERE id IN (SELECT series_id FROM series_seasons);
+UPDATE movies SET type='Episode',is_series=false
+WHERE id IN (SELECT movie_id FROM series_episodes) AND (type<>'Episode' OR is_series);
+
+-- Existing conflicting assignments require an explicit repair, never silent deletion.
+CREATE UNIQUE INDEX IF NOT EXISTS series_episodes_one_parent_idx ON series_episodes(movie_id);
+DO $relationships$
+BEGIN
+  IF NOT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='series_episodes_season_fk' AND conrelid='series_episodes'::regclass) THEN
+    ALTER TABLE series_episodes ADD CONSTRAINT series_episodes_season_fk
+      FOREIGN KEY(series_id,season_number) REFERENCES series_seasons(series_id,season_number)
+      DEFERRABLE INITIALLY IMMEDIATE;
+  END IF;
+END
+$relationships$;
 
 CREATE TABLE IF NOT EXISTS movie_comments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

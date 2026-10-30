@@ -10,6 +10,11 @@ public sealed class ErrorMiddleware(RequestDelegate next, ILogger<ErrorMiddlewar
             context.Response.StatusCode = error.StatusCode;
             await context.Response.WriteAsJsonAsync(new { message = error.Message, code = error.Code });
         }
+        catch (Npgsql.PostgresException error) when (error.SqlState is "23503" or "23505")
+        {
+            context.Response.StatusCode=StatusCodes.Status409Conflict;
+            await context.Response.WriteAsJsonAsync(new { message="This title, season, or episode changed. Refresh and try again.",code="CONTENT_CONFLICT" });
+        }
         catch (Exception error)
         {
             logger.LogError(error, "Unhandled request failure");

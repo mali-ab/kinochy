@@ -139,11 +139,16 @@ public static partial class HlsUpload
             ? ReadMasterVariants(existingPlaylist)
             : [];
         var canExtend = existingVariants.Count > 0;
-        var bundleDirectory = canExtend ? Path.GetDirectoryName(existingPlaylist!)! : CreateBundleDirectory(uploadRoot);
-        var variants = canExtend ? existingVariants : new List<(string Quality, string Playlist)>();
-        var createdBundle = !canExtend;
+        var bundleDirectory = CreateBundleDirectory(uploadRoot);
+        var variants = new List<(string Quality, string Playlist)>();
         try
         {
+            if(canExtend)
+            {
+                var replaced=renditions.Select(item=>item.Quality).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                variants.AddRange(existingVariants.Where(item=>!replaced.Contains(item.Quality)));
+                LinkVariants(existingPlaylist!,bundleDirectory,variants);
+            }
             foreach (var (quality, zip) in renditions)
             {
                 if (!QualityProfiles.ContainsKey(quality)) throw new ApiException($"Unsupported movie quality: {quality}");
@@ -154,7 +159,6 @@ public static partial class HlsUpload
                 var temporaryDirectory = FindBundleDirectory(savedPlaylist, uploadRoot);
                 var relativePlaylist = Path.GetRelativePath(temporaryDirectory, savedPlaylist);
                 var qualityDirectory = Path.Combine(bundleDirectory, quality.ToLowerInvariant());
-                if (Directory.Exists(qualityDirectory)) Directory.Delete(qualityDirectory, recursive: true);
                 Directory.Move(temporaryDirectory, qualityDirectory);
                 variants.RemoveAll(item => item.Quality.Equals(quality, StringComparison.OrdinalIgnoreCase));
                 variants.Add((quality.ToLowerInvariant(), $"{quality.ToLowerInvariant()}/{relativePlaylist.Replace('\\', '/')}"));
@@ -166,12 +170,12 @@ public static partial class HlsUpload
         }
         catch
         {
-            if (createdBundle && Directory.Exists(bundleDirectory)) Directory.Delete(bundleDirectory, recursive: true);
+            if (Directory.Exists(bundleDirectory)) Directory.Delete(bundleDirectory, recursive: true);
             throw;
         }
     }
 
-    public static async Task<string> RemoveQualitiesAsync(string masterPath, IEnumerable<string> requestedQualities)
+    public static async Task<string> RemoveQualitiesAsync(string masterPath, IEnumerable<string> requestedQualities, string uploadRoot)
     {
         var removals=requestedQualities.Select(quality=>quality.Trim().ToLowerInvariant()).Where(quality=>quality.Length>0).Distinct(StringComparer.OrdinalIgnoreCase).ToHashSet(StringComparer.OrdinalIgnoreCase);
         if(removals.Count==0)return masterPath;
@@ -182,20 +186,29 @@ public static partial class HlsUpload
         var remaining=variants.Where(item=>!removals.Contains(item.Quality)).ToList();
         if(remaining.Count==0)throw new ApiException("A movie must keep at least one HLS quality.");
 
-        var masterDirectory=Path.GetFullPath(Path.GetDirectoryName(masterPath)!);
-        var directoryPrefix=masterDirectory.TrimEnd(Path.DirectorySeparatorChar)+Path.DirectorySeparatorChar;
-        foreach(var variant in variants.Where(item=>removals.Contains(item.Quality)))
+        var directory=CreateBundleDirectory(uploadRoot);
+        try
         {
-            var relative=variant.Playlist.Replace('/',Path.DirectorySeparatorChar);
-            var firstPart=relative.Split(Path.DirectorySeparatorChar,StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-            if(firstPart is null||!firstPart.Equals(variant.Quality,StringComparison.OrdinalIgnoreCase))continue;
-            var qualityDirectory=Path.GetFullPath(Path.Combine(masterDirectory,firstPart));
-            if(!qualityDirectory.StartsWith(directoryPrefix,StringComparison.Ordinal)||!Directory.Exists(qualityDirectory))continue;
-            var attributes=File.GetAttributes(qualityDirectory);
-            Directory.Delete(qualityDirectory,recursive:(attributes&FileAttributes.ReparsePoint)==0);
+            LinkVariants(masterPath,directory,remaining);
+            var playlist=Path.Combine(directory,"playlist.m3u8");
+            await File.WriteAllTextAsync(playlist,BuildMasterPlaylist(remaining));
+            return playlist;
         }
-        await File.WriteAllTextAsync(masterPath,BuildMasterPlaylist(remaining));
-        return masterPath;
+        catch { Directory.Delete(directory,recursive:true);throw; }
+    }
+
+    private static void LinkVariants(string existingPlaylist,string destination,IEnumerable<(string Quality,string Playlist)> variants)
+    {
+        var source=Path.GetDirectoryName(Path.GetFullPath(existingPlaylist))!;
+        foreach(var variant in variants)
+        {
+            var parts=variant.Playlist.Split('/');
+            if(parts.Length<2||parts[0]!=variant.Quality||parts.Any(part=>part is "" or "." or "..")||variant.Playlist.Contains('\\'))
+                throw new ApiException("The existing quality playlist cannot be safely extended.");
+            var directory=new DirectoryInfo(Path.Combine(source,variant.Quality));
+            var target=directory.ResolveLinkTarget(true)?.FullName??directory.FullName;
+            Directory.CreateSymbolicLink(Path.Combine(destination,variant.Quality),target);
+        }
     }
 
     private static List<(string Quality, string Playlist)> ReadMasterVariants(string masterPath)

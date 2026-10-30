@@ -4,6 +4,8 @@ frontend/out/
 admin/dist/
 backend/bin/
 backend/obj/
+tests/**/bin/
+tests/**/obj/
 backend/wwwroot/
 .env
 backend/storage/uploads/

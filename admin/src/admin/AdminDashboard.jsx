@@ -15,7 +15,7 @@ export default function AdminDashboard() {
   const visibleTitles = movies.filter((movie) => movie.type !== 'Episode');
   const counts = {
     Movie: visibleTitles.filter((movie) => movie.type === 'Movie').length,
-    Series: visibleTitles.filter((movie) => movie.type === 'Series').length,
+    Series: visibleTitles.filter((movie) => movie.isSeries).length,
     Cartoon: visibleTitles.filter((movie) => movie.type === 'Cartoon').length
   };
   const maximum = Math.max(1, counts.Movie, counts.Series, counts.Cartoon);

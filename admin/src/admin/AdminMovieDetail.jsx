@@ -54,9 +54,9 @@ export default function AdminMovieDetail({ id }) {
         </div>
       </div>
       <div className="admin-detail-statusbar">
-        <span className={movie.fileStatus?.video ? 'ready' : 'pending'}>{movie.fileStatus?.video ? 'Playback ready' : 'Metadata only'}</span>
-        <span>{movie.streaming?.hls ? 'Adaptive HLS' : movie.fileStatus?.video ? 'Single video' : 'No main video'}</span>
-        <span>{movie.streaming?.qualities?.length ? movie.streaming.qualities.join(' · ') : 'Default quality'}</span>
+        <span className={movie.isSeries || movie.fileStatus?.video ? 'ready' : 'pending'}>{movie.isSeries ? 'Series title' : movie.fileStatus?.video ? 'Playback ready' : 'Metadata only'}</span>
+        <span>{movie.isSeries ? 'Seasons & episodes' : movie.streaming?.hls ? 'Adaptive HLS' : movie.fileStatus?.video ? 'Single video' : 'No main video'}</span>
+        {!movie.isSeries ? <span>{movie.streaming?.qualities?.length ? movie.streaming.qualities.join(' · ') : 'Default quality'}</span> : null}
         <span>Updated {movie.updatedAt ? new Date(movie.updatedAt).toLocaleDateString() : 'recently'}</span>
       </div>
       <div className="admin-movie-detail">
@@ -72,6 +72,7 @@ export default function AdminMovieDetail({ id }) {
           </div>
           <dl className="admin-facts">
             <dt>Type</dt><dd>{movie.type}</dd>
+            <dt>Format</dt><dd>{movie.isSeries ? 'Series · seasons & episodes' : 'Standalone · one video'}</dd>
             <dt>Year</dt><dd>{movie.year}</dd>
             <dt>Genres</dt><dd>{movie.genres?.map((genre) => translateGenre(locale, genre)).join(', ') || movie.genre}</dd>
             <dt>Duration</dt><dd>{formatDuration(movie.duration, locale)}</dd>
@@ -81,7 +82,7 @@ export default function AdminMovieDetail({ id }) {
         </div>
       </div>
       {movie.fileStatus?.video ? <MoviePlayer movie={movie} subtitles={subtitles} access={{ hasFullAccess: true }} /> : null}
-      {movie.type === 'Series' ? <AdminSeriesEpisodes movie={movie} /> : null}
+      {movie.isSeries ? <AdminSeriesEpisodes movie={movie} /> : null}
       <AdminMovieComments movie={movie} />
     </div>
   );
@@ -185,14 +186,14 @@ function AdminSeriesEpisodes({ movie }) {
     {error ? <p className="form-error" role="alert">{error}</p> : null}
     {seasons.map((season) => {
       const nextEpisode = Math.max(0, ...season.episodes.map((episode) => episode.episodeNumber)) + 1;
-      const episodeParams = new URLSearchParams({ type: 'Movie', seriesId: movie.id, seriesSlug: movie.slug, seriesTitle: movie.titleEn || movie.title, seasonNumber: String(season.number), episodeNumber: String(nextEpisode) });
+      const episodeParams = new URLSearchParams({ type: movie.type, seriesId: movie.id, seriesSlug: movie.slug, seriesTitle: movie.titleEn || movie.title, seasonNumber: String(season.number), episodeNumber: String(nextEpisode) });
       return <div className="admin-season" key={season.number}>
         <div className="admin-season-head"><h4>Season {season.number}{season.title ? ` · ${season.title}` : ''}</h4><button type="button" className="danger" disabled={season.episodes.length > 0 || removeSeasonMutation.isPending} onClick={() => removeSeason(season.number)}><Trash2 size={15} /> Delete season</button></div>
         {season.episodes.map((episode) => {
-          const editParams = new URLSearchParams({ returnTo: `/series/${movie.id}`, seriesSlug: movie.slug });
+          const editParams = new URLSearchParams({ returnTo: movieDetailPath(movie), seriesSlug: movie.slug });
           return <div className="admin-season-episode" key={episode.id}><span>{episode.episodeNumber}. {episode.title}</span><div><button type="button" className="episode-watch" onClick={() => setPreviewEpisodeId(episode.movieId)}><Play size={15} /> Test player</button><Link to={`/movies/${episode.movieId}/edit?${editParams}`}><Edit3 size={15} /> Edit</Link><button type="button" onClick={() => removeEpisode(episode.id)} aria-label={`Remove ${episode.title}`}><Trash2 size={15} /> Remove</button></div></div>;
         })}
-        <div className="admin-episode-create"><div><strong>Next: episode {nextEpisode}</strong><small>Upload HLS quality bundles and episode subtitles.</small></div><Link className="primary" to={`/movies/new?${episodeParams}`}><Plus size={16} /> Add episode movie</Link></div>
+        <div className="admin-episode-create"><div><strong>Next: episode {nextEpisode}</strong><small>Upload HLS quality bundles and episode subtitles.</small></div><Link className="primary" to={`/movies/new?${episodeParams}`}><Plus size={16} /> Add episode</Link></div>
       </div>;
     })}
     {previewEpisodeId ? <EpisodeTestPlayer movieId={previewEpisodeId} onClose={() => setPreviewEpisodeId(null)} /> : null}

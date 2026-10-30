@@ -9,20 +9,21 @@ import { AdminRowsSkeleton } from '../ui/skeleton.jsx';
 import { movieDetailPath } from './helpers.js';
 
 const typeCopy = {
-  Movie: { title: 'Films', singular: 'film', empty: 'film' },
-  Series: { title: 'Serials', singular: 'serial', empty: 'serial' },
+  Movie: { title: 'Movies', singular: 'movie', empty: 'movie' },
+  Series: { title: 'All series', singular: 'series', empty: 'series' },
   Cartoon: { title: 'Cartoons', singular: 'cartoon', empty: 'cartoon' }
 };
 const PAGE_SIZE = 12;
 
 export default function AdminMoviesList({ type = 'Movie' }) {
   const { data, isPending } = useQuery(moviesQuery(''));
-  const movies = (data ?? []).filter((movie) => movie.type === type);
+  const movies = (data ?? []).filter((movie) => type === 'Series' ? movie.isSeries : movie.type === type);
   const copy = typeCopy[type] ?? typeCopy.Movie;
   const [params, setParams] = useSearchParams();
   const search = params.get('search') || '';
   const genre = params.get('genre') || '';
   const difficulty = params.get('difficulty') || '';
+  const format = params.get('format') || '';
   const page = Math.max(1, Number(params.get('page')) || 1);
   const { locale } = useLocale();
   const genres = useMemo(() => [...new Set(movies.flatMap((movie) => movie.genres?.length ? movie.genres : [movie.genre]).filter(Boolean))].sort(), [movies]);
@@ -31,9 +32,9 @@ export default function AdminMoviesList({ type = 'Movie' }) {
     return movies.filter((movie) => {
       const searchable = `${movie.titleTm || ''} ${movie.titleEn || movie.title} ${movie.titleRu || ''} ${movie.originalTitle || ''} ${movie.year || ''}`.toLocaleLowerCase();
       const movieGenres = movie.genres?.length ? movie.genres : [movie.genre];
-      return (!term || searchable.includes(term)) && (!genre || movieGenres.includes(genre)) && (!difficulty || (movie.difficulty || 'medium') === difficulty);
+      return (!term || searchable.includes(term)) && (!genre || movieGenres.includes(genre)) && (!difficulty || (movie.difficulty || 'medium') === difficulty) && (!format || (format === 'series' ? movie.isSeries : !movie.isSeries));
     });
-  }, [movies, search, genre, difficulty]);
+  }, [movies, search, genre, difficulty, format]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
   const visible = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -61,11 +62,12 @@ export default function AdminMoviesList({ type = 'Movie' }) {
         <article><span><Languages size={19} /></span><div><strong>{movies.filter((movie) => movie.titleTm && movie.titleEn && movie.titleRu).length}</strong><small>Fully localized</small></div></article>
         <article><span><Gauge size={19} /></span><div><strong>{movies.filter((movie) => movie.fileStatus?.video).length}</strong><small>Playback ready</small></div></article>
       </section>
-      <div className="admin-filter-bar">
+      <div className="admin-filter-bar content-library-filters">
         <label className="admin-search-box"><Search size={17} /><input value={search} onChange={(event) => updateFilters({ search: event.target.value, page: 1 })} placeholder={`Search ${copy.title.toLowerCase()}…`} />{search ? <button aria-label="Clear search" onClick={() => updateFilters({ search: '', page: 1 })}><X size={15} /></button> : null}</label>
         <label className="admin-filter-field"><span>Genre</span><select value={genre} onChange={(event) => updateFilters({ genre: event.target.value, page: 1 })}><option value="">All genres</option>{genres.map((item) => <option key={item}>{item}</option>)}</select></label>
         <label className="admin-filter-field"><span>Difficulty</span><select value={difficulty} onChange={(event) => updateFilters({ difficulty: event.target.value, page: 1 })}><option value="">All levels</option><option value="easy">Easy</option><option value="medium">Medium</option><option value="hard">Hard</option></select></label>
-        {(search || genre || difficulty) ? <button className="admin-clear-filters" onClick={clearFilters}><SlidersHorizontal size={15} /> Reset</button> : null}
+        {type !== 'Series' ? <label className="admin-filter-field"><span>Format</span><select value={format} onChange={(event) => updateFilters({ format: event.target.value, page: 1 })}><option value="">All formats</option><option value="standalone">Standalone</option><option value="series">Series</option></select></label> : null}
+        {(search || genre || difficulty || format) ? <button className="admin-clear-filters" onClick={clearFilters}><SlidersHorizontal size={15} /> Reset</button> : null}
       </div>
       <div className="admin-result-bar"><span><strong>{filtered.length}</strong> results</span><span>Page {currentPage} of {pages}</span></div>
 
@@ -77,7 +79,7 @@ export default function AdminMoviesList({ type = 'Movie' }) {
             </span>
             <span className="admin-row-copy">
               <strong>{movie.title}</strong>
-              <small><span>{movie.type}</span><span>{movie.year || '—'}</span><span>{movie.genres?.join(', ') || movie.genre || 'No genre'}</span></small>
+              <small><span>{movie.type} · {movie.isSeries ? 'Series' : 'Standalone'}</span><span>{movie.year || '—'}</span><span>{movie.genres?.join(', ') || movie.genre || 'No genre'}</span></small>
             </span>
             <span className={`admin-difficulty ${movie.difficulty || 'medium'}`}>{translateDifficulty(locale, movie.difficulty || 'medium')}</span>
             <ChevronRight className="admin-row-arrow" size={19} />

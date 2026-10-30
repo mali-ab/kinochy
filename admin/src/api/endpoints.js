@@ -3,8 +3,15 @@ import { publicGet } from './http';
 
 // --- Public catalog (browser requests through the same-origin proxy) ---
 
-export function getMovies(search = '', options) {
-  return publicGet(`/api/movies?search=${encodeURIComponent(search)}`, options);
+export async function getMovies(search = '', options) {
+  const movies = [];
+  let page = 1;
+  while (true) {
+    const result = await publicGet(`/api/catalog?search=${encodeURIComponent(search)}&page=${page}&pageSize=100`, options);
+    movies.push(...result.items);
+    if (!result.hasNextPage) return movies;
+    page += 1;
+  }
 }
 
 export function getGenres(options) {

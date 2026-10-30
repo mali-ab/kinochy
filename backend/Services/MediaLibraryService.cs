@@ -111,7 +111,6 @@ public sealed partial class MediaLibraryService(IConfiguration configuration)
 
     private MediaLibraryItem? InspectSeries(string path)
     {
-        if (!TypeFromPath(path).Equals("Series", StringComparison.Ordinal)) return null;
         var episodes = new List<MediaLibraryEpisode>();
         foreach (var firstLevel in Directory.EnumerateDirectories(path))
         {
@@ -139,7 +138,7 @@ public sealed partial class MediaLibraryService(IConfiguration configuration)
         var duplicates = episodes.GroupBy(value => (value.SeasonNumber, value.EpisodeNumber)).Where(group => group.Count() > 1).ToArray();
         if (duplicates.Length > 0) throw new ApiException($"Duplicate episode numbers in {Path.GetFileName(path)}: {string.Join(", ", duplicates.Select(group => $"S{group.Key.SeasonNumber}E{group.Key.EpisodeNumber}"))}");
         var folder = Path.GetFileName(path);
-        return new(path, SuggestedTitle(folder), "Series", SuggestedYear(folder), [], [], [], episodes.OrderBy(value => value.SeasonNumber).ThenBy(value => value.EpisodeNumber).ToList());
+        return new(path, SuggestedTitle(folder), TypeFromPath(path), SuggestedYear(folder), [], [], [], episodes.OrderBy(value => value.SeasonNumber).ThenBy(value => value.EpisodeNumber).ToList());
     }
 
     private void AddEpisode(List<MediaLibraryEpisode> episodes, string path, int season, int episode)
@@ -204,8 +203,7 @@ public sealed partial class MediaLibraryService(IConfiguration configuration)
     private static string TypeFromPath(string path)
     {
         var parts = path.Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
-        return parts.Any(part => part.Equals("cartoons", StringComparison.OrdinalIgnoreCase)) ? "Cartoon"
-            : parts.Any(part => part.Equals("serials", StringComparison.OrdinalIgnoreCase)) ? "Series" : "Movie";
+        return parts.Any(part => part.Equals("cartoons", StringComparison.OrdinalIgnoreCase)) ? "Cartoon" : "Movie";
     }
     private static string SuggestedTitle(string folder) => Regex.Replace(folder, @"[._](?=\d{4}\b).*", "").Replace('.', ' ').Trim();
     private static int? SuggestedYear(string folder) => int.TryParse(Regex.Match(folder, @"(?<!\d)(?<year>19\d{2}|20\d{2})(?!\d)").Groups["year"].Value, out var year) ? year : null;

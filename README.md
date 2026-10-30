@@ -21,7 +21,20 @@ Dilewar is a movie-based English learning platform with streaming playback, inte
 - User signup, login, password reset, and language preferences
 - Free accounts can preview the first 10 minutes of every movie; Premium accounts have full playback access. Admins manage plans and optional expiry dates from the user editor.
 - Admin module for movie upload, editing, deletion, and user management
-- Movie pages show related titles and signed-in user comments. Series pages also show seasons; admins create playable episodes as movie entries, then link them under **Admin → Series movie → Seasons & episodes**.
+- Titles have a category (`Movie` or `Cartoon`) and an independent `isSeries` flag. Either category can be a standalone video with multiple qualities or a series with seasons and episodes. In the admin editor choose the category and format, save the title, then add seasons and episode videos on its details page. Episodes have their own qualities and subtitles and stay out of catalog and recommendation cards.
+- Existing `Series` titles migrate automatically to `isSeries: true` on API startup. Their category becomes `Cartoon` when their genre includes Cartoon, otherwise `Movie`; IDs, slugs, seasons, and episode links are preserved. Correct the category in the editor if necessary. API consumers must check `isSeries` instead of `type === 'Series'` to display seasons.
+
+### Catalog and playback API
+
+- `GET /api/catalog?category=Cartoon&isSeries=true&page=1&pageSize=24&search=` returns `{ items, page, pageSize, total, hasNextPage }`. Category and format filters are optional; page size is capped at 100. Cards contain catalog metadata and real subtitle-presence flags, without reading playlists during serialization.
+- `GET /api/movies` retains the legacy array response but is bounded to 100 titles by default; `page` and `pageSize` are supported. Clients with larger catalogs should use `/api/catalog`. The admin fetches catalog pages automatically.
+- `GET /api/movies/{slug}` returns playback details. Episode records retain `type: "Episode"` for compatibility and add `isEpisode`, the Movie/Cartoon `category`, and an `episode` object containing `seriesId`, `seriesSlug`, `seriesTitle`, `category`, `seasonNumber`, and `episodeNumber`. Requesting seasons for an episode resolves its parent series.
+- Optional movie-page personalization does not require a session: guests receive `[]` from `/api/users/favorites/ids`, `{ favorite: false }` from favorite status, and `{ entry: null }` from saved-word checks. Saving favorites or vocabulary still requires login. Missing or invalid sessions use free preview access.
+- Upload edits stage new immutable bundles and switch the database reference only after a successful transaction. Existing bundles remain available; retained historical bundles require a separate, reference-aware cleanup policy.
+- Free/anonymous HLS previews end normally after the last complete segment within ten minutes. Direct videos and byte-range HLS use a cached FFmpeg-encoded preview, never an estimated percentage of the source bytes. The initial encoding request can take longer; subsequent plays reuse the preview. Premium media remains available through the subscription-checked media routes. Raw uploaded video files are not served by the image endpoint.
+- Both backend Dockerfiles install FFmpeg. For a local API run, install `ffmpeg` and make it available on `PATH`.
+
+Run `npm run test:catalog` for migration and relationship checks using an isolated PostgreSQL WASM instance. Run `npm run test:media` with .NET 10 and FFmpeg installed for actual HLS/upload/encoding checks. These tests do not modify the application database.
 
 ## Project Structure
 

@@ -4209,6 +4209,11 @@ h1, h2, h3, h4, .brand, .movie-title, .catalog-feature h1 {
   background: linear-gradient(135deg, rgba(22, 32, 50, .94), rgba(15, 23, 42, .9));
   box-shadow: 0 10px 28px rgba(2, 6, 23, .16);
 }
+.content-library-filters { grid-template-columns: minmax(180px, 1fr) repeat(3, minmax(120px, 170px)) auto; }
+.content-format { min-width: 0; margin: 4px 0; padding: 16px; border: 1px solid #334155; border-radius: 14px; }
+.content-format legend { padding: 0 8px; color: #e2e8f0; font-weight: 800; }
+.content-format .source-switch { margin: 0; }
+.content-format .source-note { margin-bottom: 0; }
 .admin-search-box {
   display: flex;
   min-height: 46px;

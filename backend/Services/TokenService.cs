@@ -38,4 +38,10 @@ public sealed class TokenService(IConfiguration configuration)
         return Guid.TryParse(principal?.FindFirstValue("id"), out var id)
             ? id : throw new ApiException("Login required", 401);
     }
+
+    public Guid? UserIdOrNull(HttpRequest request)
+    {
+        var principal=Read(request.Cookies["kinochy_user"])??Read(request.Cookies["filmglish_user"]);
+        return Guid.TryParse(principal?.FindFirstValue("id"),out var id)?id:null;
+    }
 }

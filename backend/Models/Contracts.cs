@@ -44,27 +44,50 @@ public sealed record MediaLibraryPathRequest(string Path);
 public sealed record MediaLibraryEpisode(string Path, int SeasonNumber, int EpisodeNumber, string Title,
     string[] Qualities, string[] SubtitleLanguages, string[] Warnings);
 public sealed record MediaLibraryItem(string Path, string Title, string Type, int? Year, string[] Qualities,
-    string[] SubtitleLanguages, string[] Warnings, List<MediaLibraryEpisode> Episodes);
+    string[] SubtitleLanguages, string[] Warnings, List<MediaLibraryEpisode> Episodes)
+{
+    public bool IsSeries => Episodes.Count > 0;
+}
 public sealed record MediaLibraryScan(string Root, List<MediaLibraryItem> Items);
 public sealed record SeriesSeasonRequest(int SeasonNumber, string? Title);
 public sealed record SeriesEpisodeRequest(Guid MovieId, int SeasonNumber, int EpisodeNumber, string? Title);
 public sealed record SeriesEpisode(Guid Id, Guid MovieId, int EpisodeNumber, string Title, string Slug, string? CoverUrl, string? Duration);
 public sealed record SeriesSeason(int Number, string? Title, List<SeriesEpisode> Episodes);
+public sealed record EpisodeContext(Guid SeriesId,string SeriesSlug,string SeriesTitle,string Category,int SeasonNumber,int EpisodeNumber);
+public sealed record MediaAvailability(bool Video,bool Cover,bool SubtitleEn,bool SubtitleRu);
+public sealed record PlaybackSource(bool Hls,string[] Qualities);
+public sealed record MovieCatalogPage(List<MovieCard> Items,int Page,int PageSize,long Total)
+{
+    public bool HasNextPage => (long)Page*PageSize<Total;
+}
+public sealed record MovieCard(Guid Id,string Slug,string Title,string? OriginalTitle,string Description,
+    int? Year,string? Country,string? Genre,JsonElement Genres,string Type,bool IsSeries,string? Duration,
+    decimal? Rating,string? Difficulty,string? Accent,string? AgeRating,string? CoverUrl,DateTime CreatedAt,DateTime UpdatedAt,
+    string TitleTm,string TitleEn,string TitleRu,string DescriptionTm,string DescriptionEn,string DescriptionRu,MediaAvailability FileStatus)
+{
+    public string Category => Type;
+    public static MovieCard From(MovieRow movie) => new(movie.Id,movie.Slug,movie.Title,movie.OriginalTitle,movie.Description,
+        movie.Year,movie.Country,movie.Genre,movie.Genres,movie.Category,movie.IsSeries,movie.Duration,movie.Rating,movie.Difficulty,
+        movie.Accent,movie.AgeRating,movie.CoverUrl,movie.CreatedAt,movie.UpdatedAt,movie.TitleTm,movie.TitleEn,movie.TitleRu,
+        movie.DescriptionTm,movie.DescriptionEn,movie.DescriptionRu,movie.FileStatus);
+}
 public sealed record MovieRow(Guid Id, string Slug, string Title, string? OriginalTitle, string Description,
     int? Year, string? Country, string? Genre, JsonElement Genres, string Type, string? Duration,
     decimal? Rating, string? Difficulty, string? Accent, string? AgeRating, string? CoverUrl,
     [property: System.Text.Json.Serialization.JsonIgnore] string VideoPath, DateTime CreatedAt, DateTime UpdatedAt,
-    string TitleTm, string TitleEn, string TitleRu, string DescriptionTm, string DescriptionEn, string DescriptionRu)
+    string TitleTm, string TitleEn, string TitleRu, string DescriptionTm, string DescriptionEn, string DescriptionRu, bool IsSeries = false)
 {
-    public object Streaming => new
-    {
-        hls=Path.GetExtension(VideoPath).Equals(".m3u8", StringComparison.OrdinalIgnoreCase),
-        qualities=ReadHlsQualities(VideoPath)
-    };
-    public object FileStatus => new { video=!string.IsNullOrWhiteSpace(VideoPath), cover=!string.IsNullOrWhiteSpace(CoverUrl), subtitleEn=true, subtitleRu=true };
-    public object FileNames => new { video=Path.GetFileName(VideoPath), cover=CoverUrl is null?null:Path.GetFileName(CoverUrl), subtitleEn="English subtitles", subtitleRu="Russian subtitles" };
+    public EpisodeContext? Episode { get; init; }
+    public bool IsEpisode => Type.Equals("Episode",StringComparison.OrdinalIgnoreCase);
+    public string Category => Episode?.Category ?? (Type=="Cartoon"?"Cartoon":"Movie");
+    [System.Text.Json.Serialization.JsonIgnore] public bool HasEnglishSubtitles { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore] public bool HasRussianSubtitles { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore] public string[] VideoQualities { get; init; } = [];
+    public PlaybackSource Streaming => new(!IsSeries&&Path.GetExtension(VideoPath).Equals(".m3u8",StringComparison.OrdinalIgnoreCase),VideoQualities);
+    public MediaAvailability FileStatus => new(!IsSeries&&!string.IsNullOrWhiteSpace(VideoPath),!string.IsNullOrWhiteSpace(CoverUrl),HasEnglishSubtitles,HasRussianSubtitles);
+    public object FileNames => new { video=IsSeries?null:Path.GetFileName(VideoPath), cover=CoverUrl is null?null:Path.GetFileName(CoverUrl), subtitleEn=HasEnglishSubtitles?"English subtitles":null, subtitleRu=HasRussianSubtitles?"Russian subtitles":null };
 
-    private static string[] ReadHlsQualities(string videoPath)
+    internal static string[] ReadHlsQualities(string videoPath)
     {
         if (!Path.GetExtension(videoPath).Equals(".m3u8", StringComparison.OrdinalIgnoreCase) || !File.Exists(videoPath)) return [];
         try

@@ -11,9 +11,10 @@ public sealed class MediaController(MediaService media,SubscriptionService subsc
     {
         try
         {
+            DisablePlaylistCaching();
             var file=await media.VideoAsync(id);
             if(await subscriptions.HasFullAccessAsync(Request))return PhysicalFile(file.Path,file.Type,enableRangeProcessing:true);
-            return await FreePreviewVideo(file.Path,file.Type,file.Duration);
+            return PhysicalFile(await media.PreviewVideoAsync(id,Request.HttpContext.RequestAborted),"video/mp4",enableRangeProcessing:true);
         }
         catch(FileNotFoundException){return NotFound();}
     }
@@ -23,6 +24,8 @@ public sealed class MediaController(MediaService media,SubscriptionService subsc
         try
         {
             DisablePlaylistCaching();
+            if(!await subscriptions.HasFullAccessAsync(Request))
+                return Content(await media.FreePreviewPlaylistAsync(id,cancellationToken:HttpContext.RequestAborted),"application/vnd.apple.mpegurl");
             return PhysicalFile(await media.HlsAsync(id),"application/vnd.apple.mpegurl");
         }
         catch(FileNotFoundException){return NotFound();}
@@ -32,11 +35,12 @@ public sealed class MediaController(MediaService media,SubscriptionService subsc
     {
         try
         {
+            DisablePlaylistCaching();
             var hasFullAccess=await subscriptions.HasFullAccessAsync(Request);
             if(!hasFullAccess&&Path.GetExtension(assetPath).Equals(".m3u8",StringComparison.OrdinalIgnoreCase))
             {
                 DisablePlaylistCaching();
-                return Content(await media.FreePreviewPlaylistAsync(id,assetPath),"application/vnd.apple.mpegurl");
+                return Content(await media.FreePreviewPlaylistAsync(id,assetPath,HttpContext.RequestAborted),"application/vnd.apple.mpegurl");
             }
             if(!hasFullAccess&&!await media.IsFreePreviewAssetAsync(id,assetPath))
                 return NoContent();
@@ -53,6 +57,13 @@ public sealed class MediaController(MediaService media,SubscriptionService subsc
         catch(FileNotFoundException){return NotFound();}
     }
 
+    [HttpGet("media/movies/{id:guid}/preview/{key}/{asset}")]
+    public IActionResult PreviewSegment(Guid id,string key,string asset)
+    {
+        try { DisablePlaylistCaching();return PhysicalFile(media.PreviewAsset(id,key,asset),"video/mp2t",enableRangeProcessing:true); }
+        catch(FileNotFoundException){return NotFound();}
+    }
+
     private void DisablePlaylistCaching()
     {
         Response.Headers.CacheControl="no-store, no-cache, must-revalidate";
@@ -60,27 +71,4 @@ public sealed class MediaController(MediaService media,SubscriptionService subsc
         Response.Headers.Expires="0";
     }
 
-    private async Task<IActionResult> FreePreviewVideo(string path,string contentType,string? durationText)
-    {
-        var info=new FileInfo(path);var totalSeconds=DurationSeconds(durationText);
-        var previewBytes=totalSeconds<=600?info.Length:Math.Max(1,(long)(info.Length*(600d/totalSeconds)));
-        var range=Request.Headers.Range.ToString();var start=0L;
-        if(range.StartsWith("bytes=",StringComparison.OrdinalIgnoreCase))long.TryParse(range[6..].Split('-')[0],out start);
-        if(start>=previewBytes)return NoContent();
-        var end=Math.Min(previewBytes-1,start+4*1024*1024-1);var length=end-start+1;
-        Response.StatusCode=206;Response.ContentType=contentType;Response.ContentLength=length;
-        Response.Headers["Accept-Ranges"]="bytes";Response.Headers["Content-Range"]=$"bytes {start}-{end}/{previewBytes}";
-        await using var stream=System.IO.File.OpenRead(path);stream.Seek(start,SeekOrigin.Begin);
-        var buffer=new byte[64*1024];var remaining=length;
-        while(remaining>0){var read=await stream.ReadAsync(buffer.AsMemory(0,(int)Math.Min(buffer.Length,remaining)));if(read==0)break;await Response.Body.WriteAsync(buffer.AsMemory(0,read));remaining-=read;}
-        return new EmptyResult();
-    }
-
-    private static double DurationSeconds(string? value)
-    {
-        if(string.IsNullOrWhiteSpace(value))return 600;
-        var parts=value.Split(':');
-        if(parts.Length==2&&double.TryParse(parts[0],out var hours)&&double.TryParse(parts[1],out var minutes))return hours*3600+minutes*60;
-        return double.TryParse(value,out var totalMinutes)?totalMinutes*60:600;
-    }
 }

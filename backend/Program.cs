@@ -38,6 +38,13 @@ app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api"))
         context.Response.Headers.CacheControl = "no-store, no-cache, must-revalidate";
+    // Uploaded media must pass through the subscription-aware controllers.
+    if(context.Request.Path.StartsWithSegments("/media/uploads")&&
+        Path.GetExtension(context.Request.Path.Value??"").ToLowerInvariant() is not (".jpg" or ".jpeg" or ".png" or ".webp" or ".gif" or ".avif" or ".svg" or ".ico"))
+    {
+        context.Response.StatusCode=404;
+        return;
+    }
     await next();
 });
 

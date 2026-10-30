@@ -7,6 +7,8 @@
     "dev:admin": "npm run dev --prefix admin",
     "dev:server": "dotnet run --project backend",
     "build:admin": "npm run build --prefix admin",
+    "test:catalog": "node --test scripts/tests/catalog-api.test.mjs",
+    "test:media": "dotnet run --project tests/Kinochy.Checks",
     "start": "dotnet run --project backend --no-build",
     "format": "prettier --write . && dotnet csharpier format backend",
     "format:check": "prettier --check . && dotnet csharpier check backend",
@@ -14,6 +16,7 @@
     "format:backend:check": "dotnet csharpier check backend"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.13",
     "concurrently": "^9.2.1",
     "prettier": "^3.6.2"
   }
