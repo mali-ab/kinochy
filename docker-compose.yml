@@ -18,6 +18,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   app:
+    image: kinochy-app:deploy
     build:
       context: .
       dockerfile: Dockerfile
@@ -47,6 +48,7 @@ services:
         read_only: true
 
   edge:
+    image: kinochy-edge:deploy
     build:
       context: .
       dockerfile: Dockerfile

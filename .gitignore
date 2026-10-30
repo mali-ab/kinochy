@@ -14,3 +14,5 @@ backend/storage/preloaded/
 *.tar
 puzzle_movies_output/
 internet_archive_output/
+
+.deploy.env

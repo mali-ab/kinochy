@@ -167,10 +167,14 @@ docker compose logs -f app
 
 6. Open:
 
-- `http://YOUR_DOMAIN_OR_IP:4000` — public site
-- `http://YOUR_DOMAIN_OR_IP:4000/admin` — admin panel
+- `http://YOUR_DOMAIN_OR_IP:4000` — admin panel
+- `http://YOUR_DOMAIN_OR_IP:4000/swagger/` — API documentation
 
-Compose runs three application containers: `edge` (nginx, public on port 4000), `frontend` (Next.js site, internal on 5173) and `app` (ASP.NET Core API, internal on 4000). The edge serves the admin SPA under `/admin`, proxies `/api` and `/media` to the API container, and everything else to the Next.js site, so the browser only talks to port 4000.
+Compose runs PostgreSQL, `app` (ASP.NET Core API), and `edge` (nginx, public on port 4000). The edge serves the admin SPA and proxies `/api`, `/media`, and `/swagger` to the API. The separate Next.js frontend is not included in this Compose stack.
+
+### Build images locally, then deploy
+
+Copy `.deploy.env.example` to `.deploy.env` and set the SSH host, user, and authentication. Run `./deploy.sh` from a machine with Docker Compose, SSH, and rsync. The script checks that the local and server Docker platforms match, builds `app` and `edge` locally, uploads the project files and both Docker images, then starts the server with `docker compose up -d --no-build`. PostgreSQL and the named data volumes stay on the server. If `DEPLOY_SSH_PASSWORD` is set, `sshpass` is also required locally.
 
 ## Persistent Data
 
