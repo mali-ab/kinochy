@@ -158,11 +158,16 @@ UPDATE movies SET country='United States' WHERE country='USA';
 CREATE TABLE IF NOT EXISTS subtitles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   movie_id UUID NOT NULL REFERENCES movies(id) ON DELETE CASCADE,
-  language TEXT NOT NULL CHECK (language IN ('en', 'ru')),
+  language TEXT NOT NULL CHECK (language IN ('en', 'ru', 'tk')),
   cues JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(movie_id, language)
 );
+
+-- Older databases restricted subtitle tracks to English and Russian.
+ALTER TABLE subtitles DROP CONSTRAINT IF EXISTS subtitles_language_check;
+ALTER TABLE subtitles ADD CONSTRAINT subtitles_language_check
+  CHECK (language IN ('en', 'ru', 'tk')) NOT VALID;
 
 CREATE TABLE IF NOT EXISTS vocabulary (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

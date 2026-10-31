@@ -1,4 +1,4 @@
-import { Check, Film, FolderSearch, Image as ImageIcon, Plus, Save, Upload } from 'lucide-react';
+import { Check, Film, FolderSearch, Image as ImageIcon, Plus, Save, Trash2, Upload } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslations } from 'use-intl';
 import { useEffect, useState } from 'react';
@@ -72,6 +72,7 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
   });
   const [sourceType, setSourceType] = useState('hls');
   const [files, setFiles] = useState({});
+  const [subtitleUploads, setSubtitleUploads] = useState(() => (movie?.subtitleLanguages || []).map((language) => ({ id: `saved-${language}`, language, file: null, existing: true })));
   const [qualityUploads, setQualityUploads] = useState(() => relation && !movie ? [{ id: `episode-${Date.now()}-720p`, quality: '720p', file: null }] : savedQualities.map((quality) => ({ id: `saved-${quality}`, quality, file: null, existing: true })));
   const [libraryPath, setLibraryPath] = useState(() => `/media/user/Новый том/kinochy/${initialType === 'Cartoon' ? 'cartoons' : initialType === 'Series' ? 'serials' : 'films'}`);
   const [libraryScan, setLibraryScan] = useState(null);
@@ -132,8 +133,10 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
     event.target.value = '';
     if (!file) return;
     setFiles((value) => ({ ...value, [event.target.name]: file }));
-    if (event.target.name === 'subtitleZip') setFiles((value) => ({ ...value, subtitleZip: file, subtitleEn: null, subtitleRu: null }));
-    if (event.target.name === 'subtitleEn' || event.target.name === 'subtitleRu') setFiles((value) => ({ ...value, [event.target.name]: file, subtitleZip: null }));
+    if (event.target.name === 'subtitleZip') {
+      setFiles((value) => ({ ...value, subtitleZip: file }));
+      setSubtitleUploads((value) => value.map((item) => ({ ...item, file: null })));
+    }
     setProgress((value) => ({ ...value, [event.target.name]: 0 }));
   }
 
@@ -179,6 +182,9 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
       body.append(key, key === 'genres' ? JSON.stringify(value) : value);
     });
     Object.entries(files).forEach(([key, file]) => file && (!form.isSeries || key === 'cover') && body.append(key, file));
+    if (!form.isSeries && !files.subtitleZip) subtitleUploads.forEach((item) => item.file && body.append(`subtitle_${item.language.toLowerCase()}`, item.file));
+    const removedSubtitleLanguages = (movie?.subtitleLanguages || []).filter((language) => !subtitleUploads.some((item) => item.language === language));
+    if (!form.isSeries && removedSubtitleLanguages.length) body.append('removeSubtitleLanguages', JSON.stringify(removedSubtitleLanguages));
     if (relation) {
       body.append('seriesId', relation.seriesId);
       body.append('seasonNumber', String(relation.seasonNumber));
@@ -288,7 +294,7 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
       </div> : null}
       {sourceType === 'library' ? <div className="media-library-import">
         <div className="media-library-path"><FolderSearch size={20} /><input value={libraryPath} onChange={(event) => setLibraryPath(event.target.value)} placeholder="/media/user/Новый том/kinochy/films" /><button type="button" onClick={inspectLibrary} disabled={scanning}>{scanning ? 'Scanning…' : 'Scan folder'}</button></div>
-        <p>The backend reads this server directory directly. Movies use <code>Title/quality/stream.m3u8</code>. Series use <code>Series/Season 1/Episode 1/quality/stream.m3u8</code>. Put EN/RU subtitles inside each movie or episode folder.</p>
+        <p>The backend reads this server directory directly. Movies use <code>Title/quality/stream.m3u8</code>. Series use <code>Series/Season 1/Episode 1/quality/stream.m3u8</code>. Put language-coded subtitles inside each movie or episode folder.</p>
         {libraryScan?.items?.length ? <div className="media-library-results">{libraryScan.items.map((item) => <button type="button" key={item.path} className={serverMediaPath === item.path ? 'selected' : ''} onClick={() => chooseLibraryItem(item)}><span className="media-library-check">{serverMediaPath === item.path ? <Check size={16} /> : <Film size={16} />}</span><span><strong>{item.title}{item.year ? ` (${item.year})` : ''}</strong><small>{item.type}{item.episodes?.length ? ` · ${item.episodes.length} episodes · ${new Set(item.episodes.map((episode) => episode.seasonNumber)).size} seasons` : ` · ${item.qualities.join(', ')} · subtitles: ${item.subtitleLanguages.join(', ') || 'none'}`}</small>{item.episodes?.length ? <span className="media-library-episodes">{item.episodes.map((episode) => <i key={`${episode.seasonNumber}-${episode.episodeNumber}`}>S{episode.seasonNumber} E{episode.episodeNumber} · {episode.qualities.join(', ')}</i>)}</span> : null}{item.warnings.map((warning) => <em key={warning}>{warning}</em>)}</span></button>)}</div> : null}
       </div> : null}
       {!form.isSeries && sourceType === 'hls' ? <p className="source-note bundle-note"><strong>Required:</strong> each ZIP represents one quality and must contain an M3U8 playlist with its media segments.{qualityOnly ? '' : ' Keep subtitles in their own ZIP below.'}</p> : null}
@@ -302,18 +308,17 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
       </div> : null}
       {form.isSeries && sourceType === 'hls' ? <p className="source-note bundle-note"><strong>Series workflow:</strong> publish the series title first. On its details page, create seasons and then add playable episodes inside each season.</p> : null}
 
-      {!qualityOnly ? <><div className="admin-editor-section-head"><span className="admin-editor-step">{form.isSeries ? '02' : '03'}</span><div><h3>Artwork & subtitle bundle</h3><p>{form.isSeries ? 'Add artwork for the series title. Episode subtitles belong to each episode movie.' : 'Upload one subtitle ZIP for both languages, or select the files separately.'}</p></div></div>
+      {!qualityOnly ? <><div className="admin-editor-section-head"><span className="admin-editor-step">{form.isSeries ? '02' : '03'}</span><div><h3>Artwork & subtitle tracks</h3><p>{form.isSeries ? 'Add artwork for the series title. Episode subtitles belong to each episode movie.' : 'Add English, Russian, and Turkish tracks separately, or upload them together in a ZIP.'}</p></div></div>
       <div className="upload-grid">
         <FileBox icon={<ImageIcon />} name="cover" label={t('admin_cover_image')} accept="image/*" file={files.cover} current={currentFiles.cover} preview={coverPreview} progress={progress.cover} onChange={updateFile} onRemove={() => removeFile('cover')} />
-        {!form.isSeries ? <><div className="subtitle-bundle-upload"><FileBox icon={<Upload />} name="subtitleZip" label="Subtitle ZIP · EN + RU" accept=".zip,application/zip" file={files.subtitleZip} progress={progress.subtitleZip} onChange={updateFile} onRemove={() => removeFile('subtitleZip')} /><p>Name files with their language: <code>movie.en.srt</code> and <code>movie.ru.srt</code>. VTT is also supported.</p></div>
-        {!files.subtitleZip ? <><FileBox icon={<Upload />} name="subtitleEn" label={t('admin_subtitle_en')} accept=".srt,.vtt,text/vtt" file={files.subtitleEn} current={currentFiles.subtitleEn} progress={progress.subtitleEn} onChange={updateFile} onRemove={() => removeFile('subtitleEn')} /><FileBox icon={<Upload />} name="subtitleRu" label={t('admin_subtitle_ru')} accept=".srt,.vtt,text/vtt" file={files.subtitleRu} current={currentFiles.subtitleRu} progress={progress.subtitleRu} onChange={updateFile} onRemove={() => removeFile('subtitleRu')} /></> : null}</> : null}
+        {!form.isSeries ? <><div className="subtitle-bundle-upload"><FileBox icon={<Upload />} name="subtitleZip" label="Subtitle ZIP · EN + RU + TK" accept=".zip,application/zip" file={files.subtitleZip} progress={progress.subtitleZip} onChange={updateFile} onRemove={() => removeFile('subtitleZip')} /><p>Name each file with its language code: <code>movie.en.srt</code>, <code>movie.ru.srt</code>, <code>movie.tk.vtt</code>.</p></div>{!files.subtitleZip ? <SubtitleTrackEditor tracks={subtitleUploads} setTracks={setSubtitleUploads} /> : null}</> : null}
       </div>
       </> : null}
 
-      {qualityOnly ? <><div className="admin-editor-section-head"><span className="admin-editor-step">02</span><div><h3>Episode subtitles</h3><p>Upload one subtitle ZIP containing both languages, or select English and Russian subtitle files separately.</p></div></div>
+      {qualityOnly ? <><div className="admin-editor-section-head"><span className="admin-editor-step">02</span><div><h3>Episode subtitles</h3><p>Add as many subtitle languages as this episode needs.</p></div></div>
       <div className="upload-grid episode-subtitle-grid">
-        <div className="subtitle-bundle-upload"><FileBox icon={<Upload />} name="subtitleZip" label="Subtitle ZIP · EN + RU" accept=".zip,application/zip" file={files.subtitleZip} progress={progress.subtitleZip} onChange={updateFile} onRemove={() => removeFile('subtitleZip')} /><p>Name files with their language: <code>episode.en.srt</code> and <code>episode.ru.srt</code>. VTT is also supported.</p></div>
-        {!files.subtitleZip ? <><FileBox icon={<Upload />} name="subtitleEn" label="English subtitles" accept=".srt,.vtt,text/vtt" file={files.subtitleEn} current={currentFiles.subtitleEn} progress={progress.subtitleEn} onChange={updateFile} onRemove={() => removeFile('subtitleEn')} /><FileBox icon={<Upload />} name="subtitleRu" label="Russian subtitles" accept=".srt,.vtt,text/vtt" file={files.subtitleRu} current={currentFiles.subtitleRu} progress={progress.subtitleRu} onChange={updateFile} onRemove={() => removeFile('subtitleRu')} /></> : null}
+        <div className="subtitle-bundle-upload"><FileBox icon={<Upload />} name="subtitleZip" label="Subtitle ZIP · EN + RU + TK" accept=".zip,application/zip" file={files.subtitleZip} progress={progress.subtitleZip} onChange={updateFile} onRemove={() => removeFile('subtitleZip')} /><p>Use <code>episode.en.srt</code>, <code>episode.ru.srt</code>, and <code>episode.tk.vtt</code>.</p></div>
+        {!files.subtitleZip ? <SubtitleTrackEditor tracks={subtitleUploads} setTracks={setSubtitleUploads} /> : null}
       </div></> : null}
 
       {error ? <p className="form-error">{error}</p> : null}
@@ -323,6 +328,26 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
       {busy ? <UploadStatus status={uploadStatus} /> : null}
     </form>
   );
+}
+
+const subtitleLanguageOptions = [
+  ['en','English'],['ru','Russian'],['tk','Turkish']
+];
+
+function SubtitleTrackEditor({ tracks, setTracks }) {
+  function addTrack() {
+    const language = subtitleLanguageOptions.find(([code]) => !tracks.some((item) => item.language === code))?.[0] || `lang${tracks.length + 1}`;
+    setTracks((value) => [...value, { id: `${Date.now()}-${language}`, language, file: null, existing: false }]);
+  }
+  return <div className="subtitle-track-editor">
+    <div className="subtitle-track-editor-head"><div><strong>Individual subtitle tracks</strong><small>Select a language, then choose its SRT or VTT file.</small></div><button type="button" onClick={addTrack}><Plus size={16} /> Add language</button></div>
+    {tracks.map((item) => <div className="subtitle-track-upload" key={item.id}>
+      <select aria-label="Subtitle language" value={item.language} disabled={item.existing} required onChange={(event) => setTracks((value) => value.map((track) => track.id === item.id ? { ...track, language: event.target.value } : track))}>{subtitleLanguageOptions.map(([code,label]) => <option key={code} value={code} disabled={tracks.some((track) => track.id !== item.id && track.language === code)}>{label} · {code.toUpperCase()}</option>)}</select>
+      <label><Upload size={16} /><span>{item.file?.name || (item.existing ? `${item.language.toUpperCase()} subtitles uploaded` : 'Choose SRT or VTT')}</span><input type="file" accept=".srt,.vtt,text/vtt" onChange={(event) => { const file=event.target.files[0]||null;setTracks((value)=>value.map((track)=>track.id===item.id?{...track,file}:track));event.target.value=''; }} /></label>
+      <button type="button" className="danger" aria-label={`Remove ${item.language} subtitles`} onClick={() => setTracks((value) => value.filter((track) => track.id !== item.id))}><Trash2 size={16} /></button>
+    </div>)}
+    {!tracks.length ? <p>No individual tracks yet. Add a language or use the ZIP uploader above.</p> : null}
+  </div>;
 }
 
 function UploadStatus({ status }) {

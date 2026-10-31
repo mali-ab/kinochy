@@ -104,7 +104,7 @@ public sealed partial class MediaLibraryService(IConfiguration configuration)
         var warnings = new List<string>();
         var ignored = Directory.EnumerateDirectories(path).Select(Path.GetFileName).Where(name => name is not null && QualityName().IsMatch(name) && !qualities.Contains(name, StringComparer.OrdinalIgnoreCase)).ToArray();
         if (ignored.Length > 0) warnings.Add($"Ignored incomplete qualities: {string.Join(", ", ignored)}");
-        if (subtitles.Length == 0) warnings.Add("No EN or RU subtitle file found at the title root.");
+        if (subtitles.Length == 0) warnings.Add("No language-coded subtitle file found at the title root.");
         var folder = Path.GetFileName(path);
         return new(path, SuggestedTitle(folder), TypeFromPath(path), SuggestedYear(folder), qualities, subtitles, warnings.ToArray(), []);
     }
@@ -198,7 +198,10 @@ public sealed partial class MediaLibraryService(IConfiguration configuration)
     private static string? SubtitleLanguage(string path)
     {
         var name = Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
-        return Regex.IsMatch(name, @"(^|[._-])en($|[._-])") ? "en" : Regex.IsMatch(name, @"(^|[._-])ru($|[._-])") ? "ru" : null;
+        var token=name.Split(['.','_',' '],StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+        if(token is "english" or "eng")return "en";
+        if(token is "russian" or "rus")return "ru";
+        return token is "en" or "ru" or "tk"?token:null;
     }
     private static string TypeFromPath(string path)
     {

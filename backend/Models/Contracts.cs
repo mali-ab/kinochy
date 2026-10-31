@@ -82,10 +82,11 @@ public sealed record MovieRow(Guid Id, string Slug, string Title, string? Origin
     public string Category => Episode?.Category ?? (Type=="Cartoon"?"Cartoon":"Movie");
     [System.Text.Json.Serialization.JsonIgnore] public bool HasEnglishSubtitles { get; init; }
     [System.Text.Json.Serialization.JsonIgnore] public bool HasRussianSubtitles { get; init; }
+    public string[] SubtitleLanguages { get; init; } = [];
     [System.Text.Json.Serialization.JsonIgnore] public string[] VideoQualities { get; init; } = [];
     public PlaybackSource Streaming => new(!IsSeries&&Path.GetExtension(VideoPath).Equals(".m3u8",StringComparison.OrdinalIgnoreCase),VideoQualities);
     public MediaAvailability FileStatus => new(!IsSeries&&!string.IsNullOrWhiteSpace(VideoPath),!string.IsNullOrWhiteSpace(CoverUrl),HasEnglishSubtitles,HasRussianSubtitles);
-    public object FileNames => new { video=IsSeries?null:Path.GetFileName(VideoPath), cover=CoverUrl is null?null:Path.GetFileName(CoverUrl), subtitleEn=HasEnglishSubtitles?"English subtitles":null, subtitleRu=HasRussianSubtitles?"Russian subtitles":null };
+    public object FileNames => new { video=IsSeries?null:Path.GetFileName(VideoPath), cover=CoverUrl is null?null:Path.GetFileName(CoverUrl), subtitleEn=HasEnglishSubtitles?"English subtitles":null, subtitleRu=HasRussianSubtitles?"Russian subtitles":null, subtitleLanguages=SubtitleLanguages };
 
     internal static string[] ReadHlsQualities(string videoPath)
     {

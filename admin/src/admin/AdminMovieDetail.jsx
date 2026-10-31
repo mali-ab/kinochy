@@ -1,12 +1,12 @@
-import { ChevronLeft, ChevronRight, Edit3, MessageSquareText, Play, Plus, Trash2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit3, MessageSquareText, Play, Plus, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { moviePosterFallback } from '../api/client';
 import { deleteAdminComment } from '../api/endpoints';
-import { useAddSeason, useDeleteMovie, useRemoveEpisode, useRemoveSeason, useSubtitles } from '../api/hooks.jsx';
+import { useAddSeason, useDeleteMovie, useRemoveEpisode, useRemoveSeason, useSubtitleTracks } from '../api/hooks.jsx';
 import { adminCommentsQuery, adminMovieQuery, seasonsQuery } from '../api/queries';
-import MoviePlayer from '../player/MoviePlayer.jsx';
+import AdminMediaPlayer from './AdminMediaPlayer.jsx';
 import { translateDifficulty, translateGenre, useLocale } from '../ui/locale.jsx';
 import { useConfirm } from './confirm.jsx';
 import { formatDuration, movieDetailPath, movieSection } from './helpers.js';
@@ -17,7 +17,8 @@ export default function AdminMovieDetail({ id }) {
   const { requestConfirm } = useConfirm();
   const movieResult = useQuery({ ...adminMovieQuery(id), retry: false });
   const movie = movieResult.data ?? null;
-  const { subtitles, ready: subtitlesReady } = useSubtitles(movie?.slug);
+  const subtitleLanguages = movie?.subtitleLanguages?.length ? movie.subtitleLanguages : ['en', 'ru'];
+  const { subtitles, ready: subtitlesReady } = useSubtitleTracks(movie?.slug, subtitleLanguages);
   const deleteMovieMutation = useDeleteMovie();
   const { locale } = useLocale();
 
@@ -81,7 +82,7 @@ export default function AdminMovieDetail({ id }) {
           </dl>
         </div>
       </div>
-      {movie.fileStatus?.video ? <MoviePlayer movie={movie} subtitles={subtitles} access={{ hasFullAccess: true }} /> : null}
+      {movie.fileStatus?.video ? <AdminMediaPlayer movie={movie} subtitles={subtitles} /> : null}
       {movie.isSeries ? <AdminSeriesEpisodes movie={movie} /> : null}
       <AdminMovieComments movie={movie} />
     </div>
@@ -175,43 +176,42 @@ function AdminSeriesEpisodes({ movie }) {
     removeSeasonMutation.mutate(seasonNumber, { onError: (issue) => setError(issue.message) });
   }
 
-  return <section className="admin-series-panel">
-    <h3>Seasons & episodes</h3>
-    <p>Create a season first, then create each playable episode directly inside that season.</p>
-    <form className="admin-season-create" onSubmit={createSeason}>
-      <label>Season number<input type="number" min="1" max="100" required value={seasonForm.seasonNumber} onChange={(event) => setSeasonForm((current) => ({ ...current, seasonNumber: event.target.value }))} /></label>
-      <label>Season title (optional)<input maxLength="200" value={seasonForm.title} onChange={(event) => setSeasonForm((current) => ({ ...current, title: event.target.value }))} /></label>
-      <button className="primary" disabled={addSeasonMutation.isPending}><Plus size={16} /> Create season</button>
-    </form>
-    {error ? <p className="form-error" role="alert">{error}</p> : null}
-    {seasons.map((season) => {
-      const nextEpisode = Math.max(0, ...season.episodes.map((episode) => episode.episodeNumber)) + 1;
-      const episodeParams = new URLSearchParams({ type: movie.type, seriesId: movie.id, seriesSlug: movie.slug, seriesTitle: movie.titleEn || movie.title, seasonNumber: String(season.number), episodeNumber: String(nextEpisode) });
-      return <div className="admin-season" key={season.number}>
-        <div className="admin-season-head"><h4>Season {season.number}{season.title ? ` · ${season.title}` : ''}</h4><button type="button" className="danger" disabled={season.episodes.length > 0 || removeSeasonMutation.isPending} onClick={() => removeSeason(season.number)}><Trash2 size={15} /> Delete season</button></div>
-        {season.episodes.map((episode) => {
-          const editParams = new URLSearchParams({ returnTo: movieDetailPath(movie), seriesSlug: movie.slug });
-          return <div className="admin-season-episode" key={episode.id}><span>{episode.episodeNumber}. {episode.title}</span><div><button type="button" className="episode-watch" onClick={() => setPreviewEpisodeId(episode.movieId)}><Play size={15} /> Test player</button><Link to={`/movies/${episode.movieId}/edit?${editParams}`}><Edit3 size={15} /> Edit</Link><button type="button" onClick={() => removeEpisode(episode.id)} aria-label={`Remove ${episode.title}`}><Trash2 size={15} /> Remove</button></div></div>;
-        })}
-        <div className="admin-episode-create"><div><strong>Next: episode {nextEpisode}</strong><small>Upload HLS quality bundles and episode subtitles.</small></div><Link className="primary" to={`/movies/new?${episodeParams}`}><Plus size={16} /> Add episode</Link></div>
-      </div>;
-    })}
+  return <>
+    <section className="admin-series-panel">
+      <h3>Seasons & episodes</h3>
+      <p>Create a season first, then create each playable episode directly inside that season.</p>
+      <form className="admin-season-create" onSubmit={createSeason}>
+        <label>Season number<input type="number" min="1" max="100" required value={seasonForm.seasonNumber} onChange={(event) => setSeasonForm((current) => ({ ...current, seasonNumber: event.target.value }))} /></label>
+        <label>Season title (optional)<input maxLength="200" value={seasonForm.title} onChange={(event) => setSeasonForm((current) => ({ ...current, title: event.target.value }))} /></label>
+        <button className="primary" disabled={addSeasonMutation.isPending}><Plus size={16} /> Create season</button>
+      </form>
+      {error ? <p className="form-error" role="alert">{error}</p> : null}
+      {seasons.map((season) => {
+        const nextEpisode = Math.max(0, ...season.episodes.map((episode) => episode.episodeNumber)) + 1;
+        const episodeParams = new URLSearchParams({ type: movie.type, seriesId: movie.id, seriesSlug: movie.slug, seriesTitle: movie.titleEn || movie.title, seasonNumber: String(season.number), episodeNumber: String(nextEpisode) });
+        return <div className="admin-season" key={season.number}>
+          <div className="admin-season-head"><h4>Season {season.number}{season.title ? ` · ${season.title}` : ''}</h4><button type="button" className="danger" disabled={season.episodes.length > 0 || removeSeasonMutation.isPending} onClick={() => removeSeason(season.number)}><Trash2 size={15} /> Delete season</button></div>
+          {season.episodes.map((episode) => {
+            const editParams = new URLSearchParams({ returnTo: movieDetailPath(movie), seriesSlug: movie.slug });
+            const selected = previewEpisodeId === episode.movieId;
+            return <div className={`admin-season-episode${selected ? ' selected' : ''}`} key={episode.id}><span>{episode.episodeNumber}. {episode.title}</span><div><button type="button" className="episode-watch" aria-pressed={selected} onClick={() => setPreviewEpisodeId(episode.movieId)}><Play size={15} /> {selected ? 'Playing' : 'Test player'}</button><Link to={`/movies/${episode.movieId}/edit?${editParams}`}><Edit3 size={15} /> Edit</Link><button type="button" onClick={() => removeEpisode(episode.id)} aria-label={`Remove ${episode.title}`}><Trash2 size={15} /> Remove</button></div></div>;
+          })}
+          <div className="admin-episode-create"><div><strong>Next: episode {nextEpisode}</strong><small>Upload HLS quality bundles and episode subtitles.</small></div><Link className="primary" to={`/movies/new?${episodeParams}`}><Plus size={16} /> Add episode</Link></div>
+        </div>;
+      })}
+    </section>
     {previewEpisodeId ? <EpisodeTestPlayer movieId={previewEpisodeId} onClose={() => setPreviewEpisodeId(null)} /> : null}
-  </section>;
+  </>;
 }
 
 function EpisodeTestPlayer({ movieId, onClose }) {
   const movieResult = useQuery({ ...adminMovieQuery(movieId), retry: false });
   const movie = movieResult.data ?? null;
-  const { subtitles, ready: subtitlesReady } = useSubtitles(movie?.slug);
+  const subtitleLanguages = movie?.subtitleLanguages?.length ? movie.subtitleLanguages : ['en', 'ru'];
+  const { subtitles, ready: subtitlesReady } = useSubtitleTracks(movie?.slug, subtitleLanguages);
 
-  return <section className="admin-episode-preview" aria-label="Episode test player">
-      <div className="admin-episode-preview-head">
-        <div><span>Episode test player</span><strong>{movie?.titleEn || movie?.title || 'Loading episode…'}</strong>{movie ? <small>{movie.streaming?.qualities?.length ? movie.streaming.qualities.join(' · ') : 'Default quality'} · Full admin access</small> : null}</div>
-        <button type="button" onClick={onClose} aria-label="Close episode player"><X size={18} /> Close</button>
-      </div>
-      <div className="admin-episode-preview-body">
-        {movieResult.isPending || !subtitlesReady ? <div className="status">Loading episode player...</div> : movieResult.error || !movie ? <p className="form-error">The episode could not be loaded.</p> : movie.fileStatus?.video ? <MoviePlayer movie={movie} subtitles={subtitles} access={{ hasFullAccess: true }} /> : <p className="form-error">This episode has no playable video.</p>}
-      </div>
-    </section>;
+  if (movieResult.isPending || !subtitlesReady) return <div className="status">Loading episode player...</div>;
+  if (movieResult.error || !movie) return <p className="form-error">The episode could not be loaded.</p>;
+  if (!movie.fileStatus?.video) return <p className="form-error">This episode has no playable video.</p>;
+  return <AdminMediaPlayer movie={movie} subtitles={subtitles} title={movie.titleEn || movie.title} onClose={onClose} />;
 }

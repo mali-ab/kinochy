@@ -24,7 +24,7 @@ public static class SubtitleBundle
                 var extension=Path.GetExtension(entry.Name).ToLowerInvariant();
                 if(extension is not ".srt" and not ".vtt")throw new ApiException($"Unsupported subtitle file: {entry.Name}");
                 total=checked(total+entry.Length);if(total>MaxBytes)throw new ApiException("Extracted subtitles exceed 20 MiB.");
-                var language=Language(entry.Name)??throw new ApiException($"Add en/english or ru/russian to the subtitle filename: {entry.Name}");
+                var language=Language(entry.Name)??throw new ApiException($"Add a language code before the extension, for example movie.en.srt: {entry.Name}");
                 if(result.ContainsKey(language))throw new ApiException($"Subtitle ZIP contains more than one {language.ToUpperInvariant()} file.");
                 using var reader=new StreamReader(entry.Open());result[language]=await reader.ReadToEndAsync();
             }
@@ -37,9 +37,9 @@ public static class SubtitleBundle
     private static string? Language(string name)
     {
         var value=Path.GetFileNameWithoutExtension(name).ToLowerInvariant();
-        var tokens=value.Split(['.','_','-',' '],StringSplitOptions.RemoveEmptyEntries);
-        if(tokens.Any(token=>token is "en" or "eng" or "english"))return "en";
-        if(tokens.Any(token=>token is "ru" or "rus" or "russian"))return "ru";
-        return null;
+        var token=value.Split(['.','_',' '],StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+        if(token is "english" or "eng")return "en";
+        if(token is "russian" or "rus")return "ru";
+        return token is "en" or "ru" or "tk"?token:null;
     }
 }

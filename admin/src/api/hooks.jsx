@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 import { normalizeSubtitleCues } from '../player/subtitleCues.js';
 import { normalizeGenreCatalog } from '../ui/locale.jsx';
@@ -23,6 +23,15 @@ export function useSubtitles(slug) {
   return {
     subtitles: { en: normalizeSubtitleCues(en.data ?? []), ru: normalizeSubtitleCues(ru.data ?? []) },
     ready: !en.isPending && !ru.isPending
+  };
+}
+
+export function useSubtitleTracks(slug, languages = []) {
+  const normalized = [...new Set(languages.filter(Boolean).map((value) => value.toLowerCase()))];
+  const results = useQueries({ queries: normalized.map((language) => ({ ...subtitlesQuery(slug, language), enabled: Boolean(slug) })) });
+  return {
+    subtitles: Object.fromEntries(normalized.map((language, index) => [language, normalizeSubtitleCues(results[index]?.data ?? [])])),
+    ready: results.every((result) => !result.isPending)
   };
 }
 

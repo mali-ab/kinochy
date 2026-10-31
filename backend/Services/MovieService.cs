@@ -159,12 +159,27 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
             if(removals.Length>0)video=await HlsUpload.RemoveQualitiesAsync(video??existingMovie.VideoPath,removals,uploadRoot);
         }
         var cover=await Save("cover");var en=form.Files.GetFile("subtitleEn");var ru=form.Files.GetFile("subtitleRu");
+        var subtitleFiles=form.Files.Where(file=>file.Name.StartsWith("subtitle_",StringComparison.OrdinalIgnoreCase)).ToList();
         var coverUrl=cover is null?null:"/media/uploads/"+Path.GetRelativePath(storageRoot,cover).Replace('\\','/');
-        if(isSeries&&(subtitleZip is not null||en is not null||ru is not null))throw new ApiException("Add subtitles to each episode, not the series title.");
-        if(subtitleZip is not null&&(en is not null||ru is not null))throw new ApiException("Upload a subtitle ZIP or separate subtitle files, not both.");
+        if(isSeries&&(subtitleZip is not null||en is not null||ru is not null||subtitleFiles.Count>0))throw new ApiException("Add subtitles to each episode, not the series title.");
+        if(subtitleZip is not null&&(en is not null||ru is not null||subtitleFiles.Count>0))throw new ApiException("Upload a subtitle ZIP or separate subtitle files, not both.");
         var subtitleSources=!isSeries&&serverMediaPath.Length>0?libraryImport!.Subtitles:new Dictionary<string,string>();
         if(subtitleZip is not null)subtitleSources=await SubtitleBundle.ReadAsync(subtitleZip);
-        else{if(en is not null)subtitleSources["en"]=await ReadTextAsync(en);if(ru is not null)subtitleSources["ru"]=await ReadTextAsync(ru);}
+        else
+        {
+            if(en is not null)subtitleSources["en"]=await ReadTextAsync(en);if(ru is not null)subtitleSources["ru"]=await ReadTextAsync(ru);
+            foreach(var file in subtitleFiles)
+            {
+                var language=file.Name[9..].Trim().ToLowerInvariant();
+                if(language is not ("en" or "ru" or "tk"))throw new ApiException($"Subtitle language must be en, ru, or tk: {language}");
+                if(subtitleSources.ContainsKey(language))throw new ApiException($"More than one {language.ToUpperInvariant()} subtitle was uploaded.");
+                subtitleSources[language]=await ReadTextAsync(file);
+            }
+        }
+        string[] removeSubtitleLanguages;
+        try{removeSubtitleLanguages=string.IsNullOrWhiteSpace(form["removeSubtitleLanguages"].ToString())?[]:JsonSerializer.Deserialize<string[]>(form["removeSubtitleLanguages"].ToString())??[];}
+        catch(JsonException){throw new ApiException("Invalid subtitle removal list.");}
+        if(removeSubtitleLanguages.Any(language=>language is not ("en" or "ru" or "tk")))throw new ApiException("Subtitle language must be en, ru, or tk.");
         var suffix=(id??Guid.NewGuid()).ToString("N")[..8];
         var slug=System.Text.RegularExpressions.Regex.Replace(title.ToLowerInvariant(),"[^a-z0-9]+","-").Trim('-')+"-"+suffix;
         string[] submittedGenres;
@@ -221,6 +236,7 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         }
         async Task SaveSubtitles(Guid targetId,Dictionary<string,string> sources){foreach(var item in sources){var cues=SubtitleParser.Parse(item.Value);if(cues.Count==0)throw new ApiException($"{item.Key.ToUpperInvariant()} subtitle file has no valid cues.");await using var q=connection.Command("INSERT INTO subtitles(movie_id,language,cues) VALUES(@id,@language,@cues::jsonb) ON CONFLICT(movie_id,language) DO UPDATE SET cues=excluded.cues",("id",targetId),("language",item.Key),("cues",JsonSerializer.Serialize(cues,SubtitleJson)));await q.ExecuteNonQueryAsync();}}
         await SaveSubtitles(movieId,subtitleSources);
+        if(removeSubtitleLanguages.Length>0){await using var removeSubtitles=connection.Command("DELETE FROM subtitles WHERE movie_id=@id AND language=ANY(@languages)",("id",movieId),("languages",removeSubtitleLanguages));await removeSubtitles.ExecuteNonQueryAsync();}
         if(libraryImport?.Episodes.Count>0)
         {
             foreach(var episode in libraryImport.Episodes)
@@ -301,6 +317,7 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
             SELECT m.id,
               EXISTS(SELECT 1 FROM subtitles s WHERE s.movie_id=m.id AND s.language='en' AND jsonb_array_length(s.cues)>0) AS subtitle_en,
               EXISTS(SELECT 1 FROM subtitles s WHERE s.movie_id=m.id AND s.language='ru' AND jsonb_array_length(s.cues)>0) AS subtitle_ru,
+              COALESCE((SELECT array_agg(s.language ORDER BY s.language) FROM subtitles s WHERE s.movie_id=m.id AND jsonb_array_length(s.cues)>0),ARRAY[]::text[]) AS subtitle_languages,
               e.series_id,p.slug,p.title,p.type,e.season_number,e.episode_number
             FROM movies m LEFT JOIN series_episodes e ON e.movie_id=m.id
             LEFT JOIN movies p ON p.id=e.series_id WHERE m.id=ANY(@ids)
@@ -311,8 +328,8 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         {
             var index=indices[details.GetGuid(0)];var row=rows[index];
             rows[index]=row with {
-                HasEnglishSubtitles=details.GetBoolean(1),HasRussianSubtitles=details.GetBoolean(2),
-                Episode=details.IsDBNull(3)?null:new(details.GetGuid(3),details.GetString(4),details.GetString(5),details.GetString(6),details.GetInt32(7),details.GetInt32(8)),
+                HasEnglishSubtitles=details.GetBoolean(1),HasRussianSubtitles=details.GetBoolean(2),SubtitleLanguages=details.GetFieldValue<string[]>(3),
+                Episode=details.IsDBNull(4)?null:new(details.GetGuid(4),details.GetString(5),details.GetString(6),details.GetString(7),details.GetInt32(8),details.GetInt32(9)),
                 VideoQualities=includeMediaDetails&&!row.IsSeries?MovieRow.ReadHlsQualities(row.VideoPath):[]
             };
         }

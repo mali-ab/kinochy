@@ -19,7 +19,8 @@ public sealed class MoviesController(MovieService movies,MovieCommunityService c
     [HttpGet("api/movies/{slug}/subtitles/{language}")]
     public async Task<IActionResult> Subtitles(string slug,string language)
     {
-        if(language is not ("en" or "ru"))return BadRequest(new{message="Subtitle language must be en or ru"});
+        language=language.Trim().ToLowerInvariant();
+        if(language is not ("en" or "ru" or "tk"))return BadRequest(new{message="Subtitle language must be en, ru, or tk"});
         var movie=await movies.FindAsync(slug);
         if(movie is null)return NotFound(new{message="Movie not found"});
         var cues=await movies.SubtitlesAsync(movie.Id,language);
