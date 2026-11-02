@@ -36,8 +36,12 @@ builder.Services.AddSingleton<PreloadedMediaSeeder>();
 
 var app = builder.Build();
 app.UseMiddleware<ErrorMiddleware>();
-app.UseSwagger();
-app.UseSwaggerUI(options => options.SwaggerEndpoint("v1/swagger.json", "Kinochy API v1"));
+app.UseSwagger(options => options.RouteTemplate = "api/swagger/{documentName}/swagger.json");
+app.UseSwaggerUI(options =>
+{
+    options.RoutePrefix = "api/swagger";
+    options.SwaggerEndpoint("v1/swagger.json", "Kinochy API v1");
+});
 app.UseCors();
 app.Use(async (context, next) =>
 {

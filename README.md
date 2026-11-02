@@ -27,7 +27,7 @@ Dilewar is a movie-based English learning platform with streaming playback, inte
 ### Catalog and playback API
 
 - `GET /api/catalog?category=Cartoon&isSeries=true&page=1&pageSize=24&search=` returns `{ items, page, pageSize, total, hasNextPage }`. Category and format filters are optional; page size is capped at 100. Cards contain catalog metadata and real subtitle-presence flags, without reading playlists during serialization.
-- Swagger UI is available at `/swagger/` and the OpenAPI document at `/swagger/v1/swagger.json` through the Docker edge on port 4000.
+- Swagger UI is available at `/api/swagger/` and the OpenAPI document at `/api/swagger/v1/swagger.json` through the Docker edge on port 4000.
 - `GET /api/movies` retains the legacy array response but is bounded to 100 titles by default; `page` and `pageSize` are supported. Clients with larger catalogs should use `/api/catalog`. The admin fetches catalog pages automatically.
 - `GET /api/movies/{slug}` returns playback details. Episode records retain `type: "Episode"` for compatibility and add `isEpisode`, the Movie/Cartoon `category`, and an `episode` object containing `seriesId`, `seriesSlug`, `seriesTitle`, `category`, `seasonNumber`, and `episodeNumber`. Requesting seasons for an episode resolves its parent series.
 - Optional movie-page personalization does not require a session: guests receive `[]` from `/api/users/favorites/ids`, `{ favorite: false }` from favorite status, and `{ entry: null }` from saved-word checks. Saving favorites or vocabulary still requires login. Missing or invalid sessions use free preview access.
@@ -168,9 +168,9 @@ docker compose logs -f app
 6. Open:
 
 - `http://YOUR_DOMAIN_OR_IP:4000` — admin panel
-- `http://YOUR_DOMAIN_OR_IP:4000/swagger/` — API documentation
+- `http://YOUR_DOMAIN_OR_IP:4000/api/swagger/` — API documentation
 
-Compose runs PostgreSQL, `app` (ASP.NET Core API), and `edge` (nginx, public on port 4000). The edge serves the admin SPA and proxies `/api`, `/media`, and `/swagger` to the API. The separate Next.js frontend is not included in this Compose stack.
+Compose runs PostgreSQL, `app` (ASP.NET Core API), and `edge` (nginx, public on port 4000). The edge serves the admin SPA and proxies `/api` and `/media` to the API. The separate Next.js frontend is not included in this Compose stack.
 
 ### Build images locally, then deploy
 
