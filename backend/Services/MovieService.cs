@@ -5,11 +5,13 @@ using Kinochy.Api.Models;
 
 namespace Kinochy.Api.Services;
 
-public sealed class MovieService(Database database, IWebHostEnvironment environment, MediaLibraryService mediaLibrary)
+public sealed class MovieService(Database database, IWebHostEnvironment environment, MediaLibraryService mediaLibrary, IConfiguration configuration)
 {
     private const long UploadMaxBytes = 8589934592L;
     private const string Columns = "id,slug,title,original_title,description,year,country,genre,genres,type,duration,rating,difficulty,accent,age_rating,cover_url,video_path,created_at,updated_at,title_tm,title_en,title_ru,description_tm,description_en,description_ru,is_series";
     private static readonly JsonSerializerOptions SubtitleJson = new(JsonSerializerDefaults.Web);
+    private readonly string storageRoot = Path.GetFullPath(configuration["MOVIE_STORAGE_PATH"]
+        ?? Path.Combine(environment.ContentRootPath,"storage","uploads"));
 
     public async Task<MovieCatalogPage> CatalogAsync(string? search,int page=1,int pageSize=24,string? category=null,bool? isSeries=null)
     {
@@ -141,7 +143,6 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         if(rejectedVideo is not null||rejectedHlsFiles.Count>0)throw new ApiException("Direct video and single HLS bundle uploads are disabled. Upload separate HLS quality ZIPs or select a quality-based server folder.");
         if(serverMediaPath.Length>0&&qualityZips.Count>0)throw new ApiException("Choose either HLS quality ZIPs or a server movie folder, not both.");
         if(id is null&&!isSeries&&qualityZips.Count==0&&serverMediaPath.Length==0)throw new ApiException("Add at least one HLS quality ZIP or select a quality-based server movie folder.");
-        var storageRoot=Path.Combine(environment.ContentRootPath,"storage","uploads");
         var uploadRoot=Path.Combine(storageRoot,$"{Guid.NewGuid():N}-save");Directory.CreateDirectory(uploadRoot);
         var committed=false;
         try

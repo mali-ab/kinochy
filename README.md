@@ -97,7 +97,7 @@ JWT_SECRET=your-local-secret \
 dotnet run --project backend/Kinochy.Api.csproj
 ```
 
-Running only the backend provides the JSON API and media endpoints; it does not provide the Dilewar website UI. Uploaded files are kept in `backend/storage/uploads`.
+Running only the backend provides the JSON API and media endpoints; it does not provide the Dilewar website UI. Uploaded files are kept in `MOVIE_STORAGE_PATH`, or `backend/storage/uploads` when it is unset.
 
 ## Run the Full Application Without Docker
 
@@ -119,7 +119,7 @@ The admin SPA runs on `http://localhost:5174/admin` and proxies `/api` and `/med
 
 Open `http://localhost:5173`. Check the API at `http://localhost:4000/api/health`. The Next.js server proxies `/api` and `/media` to `API_ORIGIN` (default `http://localhost:4000`) so browser requests stay same-origin; set `API_ORIGIN` before starting Next.js when the API runs at another address.
 
-For local runs, set the backend variables in the process environment as shown above. `.env` is read by Docker Compose, but the ASP.NET app does not load that file on its own. Uploaded files are kept in `backend/storage/uploads`.
+For local runs, set the backend variables in the process environment as shown above. `.env` is read by Docker Compose, but the ASP.NET app does not load that file on its own. Set `MOVIE_STORAGE_PATH` to an absolute writable directory; otherwise uploads use `backend/storage/uploads`.
 
 ## Docker Deployment
 
@@ -181,9 +181,18 @@ Copy `.deploy.env.example` to `.deploy.env` and set the SSH host, user, and auth
 Docker volumes keep production data between restarts:
 
 - `postgres_data`: PostgreSQL database files
-- `app_storage`: uploaded videos, covers, subtitles, and runtime storage
+- `app_storage`: generated preview and other runtime storage
 
-Uploaded movie assets are stored inside the app volume under `/app/storage/uploads`.
+Uploaded movie assets are stored outside the container at `MOVIE_STORAGE_PATH`. Compose bind-mounts that absolute server path at the same path inside the app container. Each movie's master playlist path is saved in the database `movies.video_path` column.
+
+After setting `MOVIE_STORAGE_PATH`, migrate assets from the former Docker volume before uploading new movies:
+
+```bash
+./scripts/migrate_movie_storage.sh
+docker compose up -d --force-recreate app
+```
+
+The migration refuses a non-empty destination, verifies the copied file count, updates existing `movies.video_path` values, and retains the old Docker volume as a rollback copy.
 
 Large local HLS bundles can be kept outside the Docker volume in `backend/storage/preloaded/<movie>/`. Add a `movie.json` containing `title` and `playlist`; Compose mounts this directory read-only and startup connects the playlist to the movie with that exact title.
 
@@ -196,6 +205,7 @@ Variables kept in `.env`:
 - `JWT_SECRET`: JWT signing secret
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: PostgreSQL container settings
 - `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`: translation service configuration
+- `MOVIE_STORAGE_PATH`: absolute writable server directory for uploaded movie bundles and covers (default `/srv/kinochy/movies` in Docker)
 
 Docker uses port `4000`, the root path `/`, an 8 GiB upload limit, PostgreSQL 16 Alpine, and Node.js 22 Alpine as project defaults. `DATABASE_URL` is assembled by Docker Compose from the three PostgreSQL values. When running without Docker, supply `ASPNETCORE_URLS`, `DATABASE_URL`, `CLIENT_ORIGIN`, and `JWT_SECRET` directly to the backend process as shown above.
 

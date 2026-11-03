@@ -1,7 +1,9 @@
 namespace Kinochy.Api.Services;
 
-public sealed class MediaService(MovieService movies, IWebHostEnvironment environment)
+public sealed class MediaService(MovieService movies, IWebHostEnvironment environment, IConfiguration configuration)
 {
+    private readonly string uploadsRoot = Path.GetFullPath(configuration["MOVIE_STORAGE_PATH"]
+        ?? Path.Combine(environment.ContentRootPath,"storage","uploads"));
     public async Task<(string Path,string Type,string? Duration)> VideoAsync(Guid id)
     {
         var movie=await movies.FindAsync(id.ToString(),true);if(movie is null||movie.IsSeries||Path.GetExtension(movie.VideoPath).Equals(".m3u8",StringComparison.OrdinalIgnoreCase))throw new FileNotFoundException();
@@ -93,8 +95,9 @@ public sealed class MediaService(MovieService movies, IWebHostEnvironment enviro
             if(markerIndex<0)continue;
             var relative=normalized[(markerIndex+marker.Length)..];
             if(relative.Split('/').Any(part=>part is "" or "." or ".."))continue;
-            var candidate=Path.GetFullPath(Path.Combine(environment.ContentRootPath,"storage",storageArea,relative.Replace('/',Path.DirectorySeparatorChar)));
-            var root=Path.GetFullPath(Path.Combine(environment.ContentRootPath,"storage",storageArea))+Path.DirectorySeparatorChar;
+            var areaRoot=storageArea=="uploads"?uploadsRoot:Path.Combine(environment.ContentRootPath,"storage",storageArea);
+            var candidate=Path.GetFullPath(Path.Combine(areaRoot,relative.Replace('/',Path.DirectorySeparatorChar)));
+            var root=Path.GetFullPath(areaRoot)+Path.DirectorySeparatorChar;
             if(candidate.StartsWith(root,StringComparison.Ordinal)&&File.Exists(candidate))return candidate;
         }
         return storedPath;

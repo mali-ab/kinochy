@@ -57,7 +57,9 @@ app.Use(async (context, next) =>
     await next();
 });
 
-Directory.CreateDirectory(Path.Combine(app.Environment.ContentRootPath, "storage", "uploads"));
+var movieStoragePath=Path.GetFullPath(app.Configuration["MOVIE_STORAGE_PATH"]
+    ?? Path.Combine(app.Environment.ContentRootPath,"storage","uploads"));
+Directory.CreateDirectory(movieStoragePath);
 await app.Services.GetRequiredService<Database>().InitializeAsync();
 await app.Services.GetRequiredService<AccountSeeder>().SeedAsync();
 await app.Services.GetRequiredService<CountrySeeder>().SeedAsync();
@@ -65,7 +67,7 @@ await app.Services.GetRequiredService<PreloadedMediaSeeder>().SeedAsync();
 
 app.MapControllers();
 app.UseStaticFiles(new StaticFileOptions {
-    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(Path.Combine(app.Environment.ContentRootPath,"storage","uploads")),
+    FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(movieStoragePath),
     RequestPath = "/media/uploads",
     OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "public,max-age=604800,immutable"
 });

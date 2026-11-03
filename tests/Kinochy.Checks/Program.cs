@@ -110,7 +110,7 @@ try
     var environment=new TestEnvironment(Path.Combine(directory,"application"));
     var config=new ConfigurationBuilder().Build();
     var database=new Database(config,environment,NullLogger<Database>.Instance);
-    var movies=new MovieService(database,environment,new MediaLibraryService(config));
+    var movies=new MovieService(database,environment,new MediaLibraryService(config),config);
     var tokens=new TokenService(config);
     var context=new DefaultHttpContext();
     var account=new UsersController(new UserService(database),movies,new AuthService(database,tokens),tokens) {
