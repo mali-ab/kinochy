@@ -14,12 +14,11 @@ set +a
 
 DEPLOY_HOST="${DEPLOY_HOST:-}"
 [[ -n "$DEPLOY_HOST" ]] || die "DEPLOY_HOST is not set in $ENV_FILE"
-DEPLOY_REPO="${DEPLOY_REPO:-https://github.com/mali-ab/kinochy.git}"
-DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 DEPLOY_USER="${DEPLOY_USER:-kinochy}"
 DEPLOY_PORT="${DEPLOY_PORT:-22}"
 DEPLOY_PATH="${DEPLOY_PATH:-/home/$DEPLOY_USER/kinochy}"
 DEPLOY_SSH_KEY="${DEPLOY_SSH_KEY:-}"
+DEPLOY_SUDO_PASSWORD="${DEPLOY_SUDO_PASSWORD:-}"
 DEPLOY_STRICT_HOST_KEY_CHECKING="${DEPLOY_STRICT_HOST_KEY_CHECKING:-accept-new}"
 DEPLOY_HEALTH_URL="${DEPLOY_HEALTH_URL:-}"
 DEPLOY_NGINX_SITE_NAME="${DEPLOY_NGINX_SITE_NAME:-kinochy}"
@@ -36,6 +35,8 @@ POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 
 command -v ssh >/dev/null 2>&1 || die "ssh is not installed"
 command -v rsync >/dev/null 2>&1 || die "rsync is not installed"
+command -v dotnet >/dev/null 2>&1 || die ".NET SDK is not installed locally"
+command -v npm >/dev/null 2>&1 || die "npm is not installed locally"
 if [[ "$DEPLOY_SSH_KEY" == "~/"* ]]; then DEPLOY_SSH_KEY="$HOME/${DEPLOY_SSH_KEY#\~/}"; fi
 
 SSH_OPTS=(-p "$DEPLOY_PORT" -o "StrictHostKeyChecking=$DEPLOY_STRICT_HOST_KEY_CHECKING" -o ConnectTimeout=10 -o ServerAliveInterval=20)
@@ -54,29 +55,31 @@ REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
 shell_quote() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
 REMOTE_DIR_Q="$(shell_quote "$DEPLOY_PATH")"
 
+BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/kinochy-deploy.XXXXXX")"
+REMOTE_SECRETS=""
+cleanup() {
+  if [[ -n "$REMOTE_SECRETS" ]]; then
+    REMOTE_SECRETS_Q="$(shell_quote "$REMOTE_SECRETS")"
+    "${SSH[@]}" "$REMOTE" "rm -f -- $REMOTE_SECRETS_Q" >/dev/null 2>&1 || true
+  fi
+  rm -rf -- "$BUILD_DIR"
+}
+trap cleanup EXIT
+
+log "Building admin assets and publishing API from the local checkout"
+npm run build --prefix "$ROOT_DIR/admin"
+dotnet publish "$ROOT_DIR/backend/Kinochy.Api.csproj" -c Release --no-restore -o "$BUILD_DIR/api"
+mkdir -p "$BUILD_DIR/admin"
+cp -a "$ROOT_DIR/admin/dist/." "$BUILD_DIR/admin/"
+
 log "Preparing release directory on $REMOTE"
 "${SSH[@]}" "$REMOTE" "mkdir -p -- $REMOTE_DIR_Q/releases"
-log "Cloning $DEPLOY_REPO ($DEPLOY_BRANCH) on the server"
-DEPLOY_REPO_Q="$(shell_quote "$DEPLOY_REPO")"
-DEPLOY_BRANCH_Q="$(shell_quote "$DEPLOY_BRANCH")"
-SOURCE_PATH="$DEPLOY_PATH/source"
-SOURCE_PATH_Q="$(shell_quote "$SOURCE_PATH")"
-"${SSH[@]}" "$REMOTE" "if [[ -d $SOURCE_PATH_Q/.git ]]; then git -C $SOURCE_PATH_Q fetch --prune origin; else if [[ -e $SOURCE_PATH_Q ]] && [[ -n \$(ls -A $SOURCE_PATH_Q 2>/dev/null) ]]; then echo 'Source path exists and is not a Git checkout: $SOURCE_PATH' >&2; exit 1; fi; git clone --branch $DEPLOY_BRANCH_Q --single-branch $DEPLOY_REPO_Q $SOURCE_PATH_Q; fi; git -C $SOURCE_PATH_Q remote set-url origin $DEPLOY_REPO_Q; git -C $SOURCE_PATH_Q checkout -B $DEPLOY_BRANCH_Q origin/$DEPLOY_BRANCH_Q; git -C $SOURCE_PATH_Q reset --hard origin/$DEPLOY_BRANCH_Q"
 RELEASE_ID="$(date -u +%Y%m%d%H%M%S)-$$"
 REMOTE_RELEASE="$DEPLOY_PATH/releases/$RELEASE_ID"
 REMOTE_RELEASE_Q="$(shell_quote "$REMOTE_RELEASE")"
 "${SSH[@]}" "$REMOTE" "mkdir -p -- $REMOTE_RELEASE_Q/api $REMOTE_RELEASE_Q/admin"
-"${SSH[@]}" "$REMOTE" "bash -s -- $SOURCE_PATH_Q $REMOTE_RELEASE_Q" <<'BUILD_EOF'
-set -euo pipefail
-source_path="$1"
-release="$2"
-command -v npm >/dev/null 2>&1 || { echo 'Node.js/npm is required on the server' >&2; exit 1; }
-command -v dotnet >/dev/null 2>&1 || { echo '.NET SDK is required on the server to build the cloned repository' >&2; exit 1; }
-if [[ -f "$source_path/admin/package-lock.json" ]]; then npm ci --prefix "$source_path/admin"; else npm install --prefix "$source_path/admin"; fi
-npm run build --prefix "$source_path/admin"
-dotnet publish "$source_path/backend/Kinochy.Api.csproj" -c Release -o "$release/api"
-cp -a "$source_path/admin/dist/." "$release/admin/"
-BUILD_EOF
+rsync -az --delete -e "$RSYNC_SSH_CMD" "$BUILD_DIR/api/" "$REMOTE:$REMOTE_RELEASE/api/"
+rsync -az --delete -e "$RSYNC_SSH_CMD" "$BUILD_DIR/admin/" "$REMOTE:$REMOTE_RELEASE/admin/"
 
 if [[ -n "$DEPLOY_APP_ENV" ]]; then
   LOCAL_APP_ENV="$ROOT_DIR/$DEPLOY_APP_ENV"
@@ -84,6 +87,12 @@ if [[ -n "$DEPLOY_APP_ENV" ]]; then
   log "Uploading $DEPLOY_APP_ENV as the server .env"
   rsync -az -e "$RSYNC_SSH_CMD" "$LOCAL_APP_ENV" "$REMOTE:$DEPLOY_PATH/.env"
 fi
+
+SECRETS_FILE="$BUILD_DIR/deploy-secrets"
+REMOTE_SECRETS="/tmp/kinochy-deploy-secrets-$UID-$$"
+REMOTE_SECRETS_Q="$(shell_quote "$REMOTE_SECRETS")"
+(umask 077; printf '%s\0' "$POSTGRES_DB" "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$DEPLOY_SUDO_PASSWORD" > "$SECRETS_FILE")
+rsync -az --chmod=F600 -e "$RSYNC_SSH_CMD" "$SECRETS_FILE" "$REMOTE:$REMOTE_SECRETS"
 
 log "Installing native API service and host Nginx site"
 REMOTE_SCRIPT=$(cat <<'REMOTE_EOF'
@@ -94,22 +103,53 @@ service_user="$3"
 site_name="$4"
 server_name="$5"
 api_port="$6"
-postgres_db="$7"
-postgres_user="$8"
-postgres_password="$9"
+secrets_file="$7"
+askpass_file=""
+cleanup_deploy_secrets() {
+    rm -f -- "$secrets_file"
+    if [ -n "$askpass_file" ]; then rm -f -- "$askpass_file"; fi
+}
+trap cleanup_deploy_secrets EXIT
+mapfile -d '' -t deploy_secrets < "$secrets_file"
+test "${#deploy_secrets[@]}" -eq 4 || { echo "Invalid temporary deployment credentials file" >&2; exit 1; }
+postgres_db="${deploy_secrets[0]}"
+postgres_user="${deploy_secrets[1]}"
+postgres_password="${deploy_secrets[2]}"
+deploy_sudo_password="${deploy_secrets[3]}"
 
 test -f "$deploy_path/.env" || { echo "Missing $deploy_path/.env; it must define JWT_SECRET and MOVIE_STORAGE_PATH" >&2; exit 1; }
 for command in dotnet nginx systemctl apt-get; do command -v "$command" >/dev/null 2>&1 || { echo "Missing server command: $command" >&2; exit 1; }; done
-sudo -n -v || { echo "The deploy user needs passwordless sudo for systemd and Nginx setup" >&2; exit 1; }
+if [ -n "$deploy_sudo_password" ]; then
+    askpass_file="$(mktemp /tmp/kinochy-askpass.XXXXXX)"
+    cat > "$askpass_file" <<ASKPASS
+#!/usr/bin/env bash
+mapfile -d '' -t credentials < "$secrets_file"
+printf '%s\n' "\${credentials[3]}"
+ASKPASS
+    chmod 0700 "$askpass_file"
+    export SUDO_ASKPASS="$askpass_file"
+    sudo() { command sudo -A "$@"; }
+    if ! command sudo -A -v; then echo "The configured DEPLOY_SUDO_PASSWORD was rejected by sudo" >&2; exit 1; fi
+else
+    sudo() { command sudo -n "$@"; }
+    sudo -n -v || {
+        echo "Set DEPLOY_SUDO_PASSWORD in .deploy.env or configure passwordless sudo for '$service_user'." >&2
+        exit 1
+    }
+fi
 
 dotenv_value() {
     sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$deploy_path/.env" | tail -n 1 | sed -e 's/[[:space:]]*#.*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
 }
 movie_storage_path="$(dotenv_value MOVIE_STORAGE_PATH)"
 test -n "$movie_storage_path" || { echo "MOVIE_STORAGE_PATH is missing in $deploy_path/.env" >&2; exit 1; }
+case "$movie_storage_path" in
+    /*) ;;
+    *) movie_storage_path="$deploy_path/$movie_storage_path" ;;
+esac
 test -n "$postgres_db" && test -n "$postgres_user" && test -n "$postgres_password" || { echo "Set POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD in .deploy.env" >&2; exit 1; }
 sudo apt-get update
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql postgresql-client
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql postgresql-client acl
 sudo systemctl enable --now postgresql
 sudo -u postgres psql -v ON_ERROR_STOP=1 --set=db="$postgres_db" --set=role="$postgres_user" --set=password="$postgres_password" <<'SQL'
 SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'password')
@@ -121,11 +161,29 @@ SELECT format('ALTER DATABASE %I OWNER TO %I', :'db', :'role')\gexec
 SQL
 quote_conn_value() { printf '"%s"' "$(printf '%s' "$1" | sed 's/"/""/g')"; }
 database_url="Host=127.0.0.1;Port=5432;Database=$(quote_conn_value "$postgres_db");Username=$(quote_conn_value "$postgres_user");Password=$(quote_conn_value "$postgres_password")"
-printf 'DATABASE_URL="%s"\n' "$(printf '%s' "$database_url" | sed 's/\\/\\\\/g; s/"/\\"/g')" | sudo tee /etc/kinochy-api.env >/dev/null
+escape_env_value() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+printf 'DATABASE_URL="%s"\nMOVIE_STORAGE_PATH="%s"\n' "$(escape_env_value "$database_url")" "$(escape_env_value "$movie_storage_path")" | sudo tee /etc/kinochy-api.env >/dev/null
 sudo chmod 0600 /etc/kinochy-api.env
 
 sudo install -d -o "$service_user" -g "$service_user" "$deploy_path/shared"
 sudo install -d -o "$service_user" -g "$service_user" -m 2775 "$movie_storage_path"
+previous_movie_storage_path="$(readlink -f /var/lib/kinochy/movies 2>/dev/null || true)"
+if [ -n "$previous_movie_storage_path" ] && [ -d "$previous_movie_storage_path" ] && [ "$previous_movie_storage_path" != "$movie_storage_path" ]; then
+    echo "Migrating existing movie files from $previous_movie_storage_path to $movie_storage_path"
+    sudo cp -a "$previous_movie_storage_path/." "$movie_storage_path/"
+    if [ "$(sudo -u postgres psql -d "$postgres_db" -Atqc "SELECT to_regclass('public.movies') IS NULL" 2>/dev/null || echo t)" = "f" ]; then
+        sudo -u postgres psql -d "$postgres_db" -v ON_ERROR_STOP=1 --set=oldroot="$previous_movie_storage_path" --set=newroot="$movie_storage_path" <<'SQL'
+UPDATE movies
+SET video_path = :'newroot' || substring(video_path FROM length(:'oldroot') + 1)
+WHERE left(video_path, length(:'oldroot') + 1) = :'oldroot' || '/';
+SQL
+    fi
+fi
+acl_path="$deploy_path"
+while [ "$acl_path" != "/" ]; do
+    sudo setfacl -m u:www-data:--x "$acl_path"
+    acl_path="$(dirname "$acl_path")"
+done
 sudo install -d /var/lib/kinochy
 sudo ln -sfn "$movie_storage_path" /var/lib/kinochy/movies
 sudo ln -sfn "$release" "$deploy_path/current.new"
@@ -160,7 +218,26 @@ UNIT
 cat >"/tmp/$site_name.nginx.conf" <<NGINX
 server {
     listen 80;
+    listen [::]:80;
     server_name $server_name;
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/letsencrypt;
+        default_type text/plain;
+        try_files \$uri =404;
+    }
+    location / { return 301 https://\$host\$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    server_name $server_name;
+
+    ssl_certificate /etc/nginx/ssl/zehinli.biz/fullchain.crt;
+    ssl_certificate_key /etc/nginx/ssl/zehinli.biz/private.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
     root $deploy_path/current/admin;
     index index.html;
     client_max_body_size 0;
@@ -214,14 +291,15 @@ sudo systemctl restart kinochy-api.service
 sudo systemctl reload nginx
 healthy=0
 for attempt in $(seq 1 30); do
-    if curl -fsS --max-time 2 "http://127.0.0.1:$api_port/api/health" >/dev/null; then healthy=1; break; fi
+    if sudo systemctl is-active --quiet kinochy-api.service && curl -fsS --max-time 2 "http://127.0.0.1:$api_port/api/health" >/dev/null; then healthy=1; break; fi
     sleep 1
 done
 test "$healthy" -eq 1 || { sudo systemctl --no-pager --full status kinochy-api.service; exit 1; }
+curl -fsS --resolve "$server_name:443:127.0.0.1" "https://$server_name/api/health" >/dev/null
 echo "API health check passed"
 REMOTE_EOF
 )
 
-"${SSH[@]}" "$REMOTE" "bash -s -- $REMOTE_RELEASE_Q $(shell_quote "$DEPLOY_PATH") $(shell_quote "$DEPLOY_USER") $(shell_quote "$DEPLOY_NGINX_SITE_NAME") $(shell_quote "$DEPLOY_SERVER_NAME") $(shell_quote "$DEPLOY_API_PORT") $(shell_quote "$POSTGRES_DB") $(shell_quote "$POSTGRES_USER") $(shell_quote "$POSTGRES_PASSWORD")" <<<"$REMOTE_SCRIPT"
+"${SSH[@]}" "$REMOTE" "bash -s -- $REMOTE_RELEASE_Q $(shell_quote "$DEPLOY_PATH") $(shell_quote "$DEPLOY_USER") $(shell_quote "$DEPLOY_NGINX_SITE_NAME") $(shell_quote "$DEPLOY_SERVER_NAME") $(shell_quote "$DEPLOY_API_PORT") $REMOTE_SECRETS_Q" <<<"$REMOTE_SCRIPT"
 
 log "Deployment complete (native API service behind host Nginx)"

@@ -156,7 +156,7 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         var episodeSeason=hasSeriesRelation?relationSeason:existingMovie?.Episode?.SeasonNumber??1;
         var episodeNumber=hasSeriesRelation?relationEpisode:existingMovie?.Episode?.EpisodeNumber??1;
         var uploadRoot=isEpisode&&seriesFolderSlug is not null
-            ?Path.Combine(storageRoot,seriesFolderSlug,$"season-{episodeSeason:00}",$"episode-{episodeNumber:000}-{slug}")
+            ?Path.Combine(storageRoot,seriesFolderSlug,$"season-{episodeSeason:000}",$"episode-{episodeNumber:000}")
             :Path.Combine(storageRoot,slug);
         var oldVideoRoot=existingMovie is null?null:existingMovie.IsEpisode?StorageEpisodeRootForPath(existingMovie.VideoPath,storageRoot):StorageRootForPath(existingMovie.VideoPath,storageRoot);
         var oldCoverRoot=existingMovie is null?null:StorageRootForUrl(existingMovie.CoverUrl,storageRoot);

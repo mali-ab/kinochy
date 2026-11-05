@@ -2,7 +2,6 @@ import { ChevronRight, CircleCheck, Clapperboard, Database, Film, LayoutDashboar
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslations } from 'use-intl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import logo from '../assets/kinochy_favicon.png';
 import { adminLogout } from '../api/endpoints';
 import { adminSessionQuery, queryKeys } from '../api/queries';
 import { LocaleProvider } from '../ui/locale.jsx';
@@ -68,7 +67,7 @@ function AdminChrome({ admin, onLogout, children }) {
     <header className="admin-topbar">
       <div className="admin-topbar-inner">
         <Link to="/" className="admin-brand" aria-label="Kinoçy administration home">
-          <span className="brand-mark"><img src={logo} alt="" width={36} height={36} /></span>
+          <span className="brand-mark"><img src="/assets/logo.png" alt="" width={36} height={36} /></span>
           <span className="admin-brand-copy"><strong>Kinoçy</strong><small>Content operations</small></span>
         </Link>
         <div className="admin-system-state"><span><CircleCheck size={14} /> System online</span><small>Production workspace</small></div>
@@ -96,7 +95,7 @@ function AdminChrome({ admin, onLogout, children }) {
 
     <footer className="admin-footer">
       <div className="admin-footer-inner">
-        <div className="admin-footer-brand"><img src={logo} alt="" width={28} height={28} /><span><strong>Kinoçy Admin</strong><small>Movies, learning and community in one workspace.</small></span></div>
+          <div className="admin-footer-brand"><img src="/assets/logo.png" alt="" width={28} height={28} /><span><strong>Kinoçy Admin</strong><small>Movies, learning and community in one workspace.</small></span></div>
         <nav aria-label="Footer navigation">{navigation.map((item) => <Link key={item.to} to={item.to}>{item.label}</Link>)}</nav>
         <span className="admin-footer-status"><CircleCheck size={14} /> Operational</span>
       </div>

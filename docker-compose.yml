@@ -40,15 +40,15 @@ services:
       LIBRETRANSLATE_URL: ${LIBRETRANSLATE_URL:-https://translate.mstdn.social/translate}
       LIBRETRANSLATE_API_KEY: ${LIBRETRANSLATE_API_KEY:-}
       MEDIA_LIBRARY_ROOT: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
-      MOVIE_STORAGE_PATH: ${MOVIE_STORAGE_PATH:-/srv/kinochy/movies}
+      MOVIE_STORAGE_PATH: /movie_storage
     expose:
       - '4000'
     volumes:
       - app_storage:/app/storage
-      - ./backend/storage/preloaded:/app/storage/preloaded:ro
       - type: bind
-        source: ${MOVIE_STORAGE_PATH:-/srv/kinochy/movies}
-        target: ${MOVIE_STORAGE_PATH:-/srv/kinochy/movies}
+        source: ${MOVIE_STORAGE_PATH:-./backend/storage/uploads}
+        target: /movie_storage
+      - ./backend/storage/preloaded:/app/storage/preloaded:ro
       - type: bind
         source: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
         target: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}

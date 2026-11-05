@@ -2,7 +2,6 @@ import { ArrowLeft, CheckCircle2, Eye, EyeOff, Film, LockKeyhole, ShieldCheck, S
 import { useTranslations } from 'use-intl';
 import { useState } from 'react';
 import { adminLogin } from '../api/endpoints';
-import logo from '../assets/kinochy_favicon.png';
 
 export default function AdminLogin({ onLogin }) {
   const [email, setEmail] = useState('');
@@ -30,7 +29,7 @@ export default function AdminLogin({ onLogin }) {
     <section className="admin-login-page">
       <div className="admin-login-shell">
         <aside className="admin-login-story">
-          <div className="admin-login-brand"><span><img src={logo} alt="" /></span><div><strong>Kinoçy</strong><small>Content operations</small></div></div>
+          <div className="admin-login-brand"><span><img src="/assets/logo.png" alt="" /></span><div><strong>Kinoçy</strong><small>Content operations</small></div></div>
           <div className="admin-login-copy">
             <span className="admin-login-kicker"><Sparkles size={14} /> Studio workspace</span>
             <h1>Shape every story from one place.</h1>

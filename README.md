@@ -119,7 +119,7 @@ The admin SPA runs on `http://localhost:5174/admin` and proxies `/api` and `/med
 
 Open `http://localhost:5173`. Check the API at `http://localhost:4000/api/health`. The Next.js server proxies `/api` and `/media` to `API_ORIGIN` (default `http://localhost:4000`) so browser requests stay same-origin; set `API_ORIGIN` before starting Next.js when the API runs at another address.
 
-In Development, the ASP.NET app loads the project-root `.env` file; process environment variables take precedence. Set `MOVIE_STORAGE_PATH` there to an absolute directory writable by the user running the backend. If it is unset, uploads use `backend/storage/uploads`.
+In Development, the ASP.NET app loads the project-root `.env` file; process environment variables take precedence. `MOVIE_STORAGE_PATH=backend/storage/uploads` stores uploads in the repository's persistent storage directory when starting the backend from the repository root. On deployment, `deploy.sh` anchors that relative path under `DEPLOY_PATH` so releases share the same storage folder.
 
 ## Docker Deployment
 
@@ -174,7 +174,7 @@ Compose runs PostgreSQL, `app` (ASP.NET Core API), and `edge` (nginx, public on 
 
 ### Deploy the API and admin without Docker
 
-Copy `.deploy.env.example` to `.deploy.env` and set the SSH host, user, authentication, `DEPLOY_SERVER_NAME`, and a strong `POSTGRES_PASSWORD`. `DEPLOY_REPO` defaults to `https://github.com/mali-ab/kinochy.git`, and `DEPLOY_BRANCH` defaults to `main`. Run `./deploy.sh` from a machine with SSH and rsync. The script clones or fetches that repository into `$DEPLOY_PATH/source`, builds the admin SPA and publishes the API from that server checkout, installs PostgreSQL on Debian/Ubuntu, creates the configured database and role, switches a `current` symlink, installs/restarts a systemd API service, and reloads host Nginx. PostgreSQL and the app both run directly on the server, outside Docker. Set `JWT_SECRET` and `MOVIE_STORAGE_PATH` in the app `.env`; the script builds the API's local `DATABASE_URL` from `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` in `.deploy.env`. The server needs Git, Node.js/npm, the .NET 10 SDK, Nginx, systemd, and passwordless sudo for PostgreSQL, Nginx, and systemd setup.
+Copy `.deploy.env.example` to `.deploy.env` and set the SSH host, user, authentication, `DEPLOY_SERVER_NAME`, and a strong `POSTGRES_PASSWORD`. Set `DEPLOY_SUDO_PASSWORD` in the ignored `.deploy.env` if the SSH user needs a sudo password; alternatively, configure passwordless sudo for that user. Point the domain at the server and allow inbound ports 80 and 443. Nginx redirects HTTP to HTTPS using the existing ZeroSSL certificate at `/etc/nginx/ssl/zehinli.biz/`; the certificate must cover `DEPLOY_SERVER_NAME`. `DEPLOY_API_PORT` is private and used only between Nginx and the API. Run `./deploy.sh` from your local checkout on a machine with Node.js/npm, the .NET 10 SDK, SSH, and rsync. The script builds the admin SPA and publishes the API locally, then syncs those release artifacts to the server. It installs PostgreSQL on Debian/Ubuntu, creates the configured database and role, switches a `current` symlink, installs/restarts a systemd API service, and configures host Nginx. PostgreSQL and the app both run directly on the server, outside Docker. Set `JWT_SECRET` in the app `.env`; the script anchors `MOVIE_STORAGE_PATH=backend/storage/uploads` at `$DEPLOY_PATH`, copies existing files into that folder, and updates stored movie paths during migration. It builds the API's local `DATABASE_URL` from `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` in `.deploy.env`.
 
 This repository snapshot does not contain the separate Next.js public frontend source. The deployed site root serves the admin SPA; add the frontend build artifact and its Nginx route when that source is available.
 
@@ -185,7 +185,7 @@ Docker volumes keep production data between restarts:
 - `postgres_data`: PostgreSQL database files
 - `app_storage`: generated preview and other runtime storage
 
-Uploaded movie assets are stored outside the container at `MOVIE_STORAGE_PATH`. Compose bind-mounts that absolute server path at the same path inside the app container. Each movie's master playlist path is saved in the database `movies.video_path` column.
+Uploaded movie assets are stored at `MOVIE_STORAGE_PATH` (default `backend/storage/uploads`). Compose bind-mounts that host folder at `/movie_storage` inside the app container. Each movie's master playlist path is saved in the database `movies.video_path` column.
 
 After setting `MOVIE_STORAGE_PATH`, migrate assets from the former Docker volume before uploading new movies:
 
@@ -193,6 +193,14 @@ After setting `MOVIE_STORAGE_PATH`, migrate assets from the former Docker volume
 ./scripts/migrate_movie_storage.sh
 docker compose up -d --force-recreate app
 ```
+
+To copy the Docker app's uploaded movie files into `backend/storage/uploads` without changing database paths or deleting the Docker originals, run:
+
+```bash
+./scripts/copy_docker_movies_to_storage.sh
+```
+
+The copy can be resumed safely. Existing destination files are kept and verified against the Docker source; conflicts stop the script.
 
 The migration can resume into a non-empty destination without overwriting files. It verifies that existing files match, updates existing `movies.video_path` values, and then removes only the old volume's uploaded movie files. Runtime previews and other volume data remain intact.
 
@@ -207,7 +215,7 @@ Variables kept in `.env`:
 - `JWT_SECRET`: JWT signing secret
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`: PostgreSQL container settings
 - `LIBRETRANSLATE_URL`, `LIBRETRANSLATE_API_KEY`: translation service configuration
-- `MOVIE_STORAGE_PATH`: absolute writable server directory for uploaded movie bundles and covers (default `/srv/kinochy/movies` in Docker)
+- `MOVIE_STORAGE_PATH`: writable folder for uploaded movie bundles and covers (default `backend/storage/uploads`)
 
 Docker uses port `4000`, the root path `/`, an 8 GiB upload limit, PostgreSQL 16 Alpine, and Node.js 22 Alpine as project defaults. `DATABASE_URL` is assembled by Docker Compose from the three PostgreSQL values. When running without Docker, supply `ASPNETCORE_URLS`, `DATABASE_URL`, `CLIENT_ORIGIN`, and `JWT_SECRET` directly to the backend process as shown above.
 
