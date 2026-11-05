@@ -127,22 +127,23 @@ export default function MoviePlayer({ movie, subtitles, access }) {
         const compactConfig = isCompactPlayback()
           ? {
               backBufferLength: 2,
-              maxBufferLength: 4,
-              maxMaxBufferLength: 6,
-              maxBufferSize: 4 * 1000 * 1000
-            }
-          : {
-              backBufferLength: 8,
               maxBufferLength: 8,
               maxMaxBufferLength: 12,
-              maxBufferSize: 12 * 1000 * 1000
+              maxBufferSize: 8 * 1000 * 1000
+            }
+          : {
+              backBufferLength: 15,
+              maxBufferLength: 20,
+              maxMaxBufferLength: 30,
+              maxBufferSize: 30 * 1000 * 1000
             };
         hls = new Hls({
           enableWorker: true,
           lowLatencyMode: false,
           startPosition: -1,
+          startLevel: 0,
           ...compactConfig,
-          startFragPrefetch: false
+          startFragPrefetch: true
         });
         hlsRef.current = hls;
         hls.loadSource(hlsSource);
@@ -817,7 +818,7 @@ export default function MoviePlayer({ movie, subtitles, access }) {
           <div className="subscription-paywall" role="dialog" aria-modal="true" aria-label="Free preview ended">
             <span className="subscription-paywall-icon"><Crown size={28} /></span>
             <p>Free preview ended</p>
-            <h3>Continue watching with Dilewar Premium</h3>
+            <h3>Continue watching with Kinoçy Premium</h3>
             <small>You watched the free 10-minute preview. Premium unlocks every movie without limits.</small>
             <a href="/subscription">View subscription</a>
           </div>

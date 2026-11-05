@@ -25,7 +25,7 @@ export default function AdminDashboard() {
 
   return <div className="admin-dashboard">
     <section className="dashboard-hero">
-      <div><span className="admin-section-kicker">Dilewar operations</span><h2>Everything important, at a glance.</h2><p>Track catalog readiness, community activity and member access from one focused workspace.</p></div>
+      <div><span className="admin-section-kicker">Kinoçy operations</span><h2>Everything important, at a glance.</h2><p>Track catalog readiness, community activity and member access from one focused workspace.</p></div>
       <div className="dashboard-quick-actions"><Link className="primary" to="/movies/new"><Plus size={17} /> Add title</Link><Link to="/users/new"><Users size={17} /> Add user</Link></div>
     </section>
 

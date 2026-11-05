@@ -11,9 +11,9 @@ public sealed class MediaController(MediaService media,SubscriptionService subsc
     {
         try
         {
-            DisablePlaylistCaching();
+            EnableMediaCaching();
             var file=await media.VideoAsync(id);
-            if(await subscriptions.HasFullAccessAsync(Request))return PhysicalFile(file.Path,file.Type,enableRangeProcessing:true);
+            if(await subscriptions.HasFullAccessAsync(Request))return MediaFile(file.Path,file.Type);
             return PhysicalFile(await media.PreviewVideoAsync(id,Request.HttpContext.RequestAborted),"video/mp4",enableRangeProcessing:true);
         }
         catch(FileNotFoundException){return NotFound();}
@@ -26,7 +26,7 @@ public sealed class MediaController(MediaService media,SubscriptionService subsc
             DisablePlaylistCaching();
             if(!await subscriptions.HasFullAccessAsync(Request))
                 return Content(await media.FreePreviewPlaylistAsync(id,cancellationToken:HttpContext.RequestAborted),"application/vnd.apple.mpegurl");
-            return PhysicalFile(await media.HlsAsync(id),"application/vnd.apple.mpegurl");
+            return MediaFile(await media.HlsAsync(id),"application/vnd.apple.mpegurl");
         }
         catch(FileNotFoundException){return NotFound();}
     }
@@ -35,7 +35,6 @@ public sealed class MediaController(MediaService media,SubscriptionService subsc
     {
         try
         {
-            DisablePlaylistCaching();
             var hasFullAccess=await subscriptions.HasFullAccessAsync(Request);
             if(!hasFullAccess&&Path.GetExtension(assetPath).Equals(".m3u8",StringComparison.OrdinalIgnoreCase))
             {
@@ -52,7 +51,8 @@ public sealed class MediaController(MediaService media,SubscriptionService subsc
                 _=>"application/octet-stream"
             };
             if(Path.GetExtension(path).Equals(".m3u8",StringComparison.OrdinalIgnoreCase))DisablePlaylistCaching();
-            return PhysicalFile(path,type,enableRangeProcessing:true);
+            else EnableMediaCaching();
+            return MediaFile(path,type);
         }
         catch(FileNotFoundException){return NotFound();}
     }
@@ -60,7 +60,7 @@ public sealed class MediaController(MediaService media,SubscriptionService subsc
     [HttpGet("media/movies/{id:guid}/preview/{key}/{asset}")]
     public IActionResult PreviewSegment(Guid id,string key,string asset)
     {
-        try { DisablePlaylistCaching();return PhysicalFile(media.PreviewAsset(id,key,asset),"video/mp2t",enableRangeProcessing:true); }
+        try { EnableMediaCaching();return PhysicalFile(media.PreviewAsset(id,key,asset),"video/mp2t",enableRangeProcessing:true); }
         catch(FileNotFoundException){return NotFound();}
     }
 
@@ -69,6 +69,24 @@ public sealed class MediaController(MediaService media,SubscriptionService subsc
         Response.Headers.CacheControl="no-store, no-cache, must-revalidate";
         Response.Headers.Pragma="no-cache";
         Response.Headers.Expires="0";
+    }
+
+    private void EnableMediaCaching()
+    {
+        // Media URLs are immutable, but access is user-specific. Browsers may
+        // reuse segments while shared proxies must not cache authenticated data.
+        Response.Headers.CacheControl="private, max-age=604800, immutable";
+        Response.Headers.Remove("Pragma");
+        Response.Headers.Remove("Expires");
+    }
+
+    private IActionResult MediaFile(string path,string contentType)
+    {
+        var accelerationUri=media.AccelerationUri(path);
+        if(accelerationUri is null)return PhysicalFile(path,contentType,enableRangeProcessing:true);
+        Response.ContentType=contentType;
+        Response.Headers["X-Accel-Redirect"]=accelerationUri;
+        return new EmptyResult();
     }
 
 }

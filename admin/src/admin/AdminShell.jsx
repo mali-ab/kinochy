@@ -67,9 +67,9 @@ function AdminChrome({ admin, onLogout, children }) {
   return <div className="admin-shell-frame">
     <header className="admin-topbar">
       <div className="admin-topbar-inner">
-        <Link to="/" className="admin-brand" aria-label="Dilewar administration home">
+        <Link to="/" className="admin-brand" aria-label="Kinoçy administration home">
           <span className="brand-mark"><img src={logo} alt="" width={36} height={36} /></span>
-          <span className="admin-brand-copy"><strong>Dilewar</strong><small>Content operations</small></span>
+          <span className="admin-brand-copy"><strong>Kinoçy</strong><small>Content operations</small></span>
         </Link>
         <div className="admin-system-state"><span><CircleCheck size={14} /> System online</span><small>Production workspace</small></div>
         <div className="admin-head-actions">
@@ -96,7 +96,7 @@ function AdminChrome({ admin, onLogout, children }) {
 
     <footer className="admin-footer">
       <div className="admin-footer-inner">
-        <div className="admin-footer-brand"><img src={logo} alt="" width={28} height={28} /><span><strong>Dilewar Admin</strong><small>Movies, learning and community in one workspace.</small></span></div>
+        <div className="admin-footer-brand"><img src={logo} alt="" width={28} height={28} /><span><strong>Kinoçy Admin</strong><small>Movies, learning and community in one workspace.</small></span></div>
         <nav aria-label="Footer navigation">{navigation.map((item) => <Link key={item.to} to={item.to}>{item.label}</Link>)}</nav>
         <span className="admin-footer-status"><CircleCheck size={14} /> Operational</span>
       </div>
@@ -105,7 +105,7 @@ function AdminChrome({ admin, onLogout, children }) {
 }
 
 function currentView(pathname) {
-  if (pathname === '/') return { label: 'Dashboard', title: 'Operations dashboard', description: 'Monitor content, members and community activity across Dilewar.' };
+  if (pathname === '/') return { label: 'Dashboard', title: 'Operations dashboard', description: 'Monitor content, members and community activity across Kinoçy.' };
   if (pathname.startsWith('/users')) return { label: 'Users', title: 'People & access', description: 'Manage member accounts, roles, subscriptions and account security.' };
   if (pathname.startsWith('/comments')) return { label: 'Comments', title: 'Community moderation', description: 'Review conversations and keep discussions useful and respectful.' };
   if (pathname === '/series' || pathname.startsWith('/series/')) return { label: 'All series', title: 'Series library', description: 'Movie and cartoon series, with seasons and playable episodes.' };

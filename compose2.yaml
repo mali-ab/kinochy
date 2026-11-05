@@ -52,11 +52,15 @@ services:
       LIBRETRANSLATE_URL: ${LIBRETRANSLATE_URL:-https://translate.mstdn.social/translate}
       LIBRETRANSLATE_API_KEY: ${LIBRETRANSLATE_API_KEY:-}
       MEDIA_LIBRARY_ROOT: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
+      MOVIE_STORAGE_PATH: ${MOVIE_STORAGE_PATH:-/srv/kinochy/movies}
     expose:
       - '4000'
     volumes:
       - app_storage:/app/storage
       - ./backend/storage/preloaded:/app/storage/preloaded:ro
+      - type: bind
+        source: ${MOVIE_STORAGE_PATH:-/srv/kinochy/movies}
+        target: ${MOVIE_STORAGE_PATH:-/srv/kinochy/movies}
       - type: bind
         source: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
         target: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
@@ -93,6 +97,14 @@ services:
       # Edge config lives next to this compose file. Edit it, then:
       #   docker compose restart nginx
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - type: bind
+        source: ${MOVIE_STORAGE_PATH:-/srv/kinochy/movies}
+        target: /var/lib/kinochy/movies
+        read_only: true
+      - type: bind
+        source: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
+        target: ${MEDIA_LIBRARY_ROOT:-/media/user/Новый том/kinochy}
+        read_only: true
 
 volumes:
   postgres_data:

@@ -37,12 +37,7 @@ log "Old Docker volume: $OLD_VOLUME"
 log "New server directory: $MOVIE_STORAGE_PATH"
 mkdir -p -- "$MOVIE_STORAGE_PATH"
 
-# Refuse to merge automatically. This prevents an existing movie bundle from
-# being silently overwritten. The old volume is retained as a rollback copy.
-if find "$MOVIE_STORAGE_PATH" -mindepth 1 -print -quit | grep -q .; then
-  die "destination is not empty: $MOVIE_STORAGE_PATH"
-fi
-
+# Copy only. A separate database-aware migration maps these folders to slugs.
 log "Copying old uploaded movies and covers"
 docker run --rm --entrypoint sh \
   --mount "type=volume,source=$OLD_VOLUME,target=/source,readonly" \
@@ -50,13 +45,29 @@ docker run --rm --entrypoint sh \
   "$APP_IMAGE" -c '
     set -eu
     [ -d /source/uploads ] || { echo "old /app/storage/uploads directory was not found" >&2; exit 1; }
-    cp -a /source/uploads/. /destination/
+    # Make interrupted migrations resumable without overwriting anything that
+    # is already in external storage.
+    cp -a --no-clobber /source/uploads/. /destination/
+    find /source/uploads -type f -exec sh -c '\''
+      for source do
+        relative=${source#/source/uploads/}
+        cmp -s "$source" "/destination/$relative" || {
+          echo "destination conflict: $relative" >&2
+          exit 1
+        }
+      done
+    '\'' sh {} +
+    find /source/uploads -type l -exec sh -c '\''
+      for source do
+        relative=${source#/source/uploads/}
+        [ -L "/destination/$relative" ] &&
+          [ "$(readlink "$source")" = "$(readlink "/destination/$relative")" ] || {
+            echo "destination symlink conflict: $relative" >&2
+            exit 1
+          }
+      done
+    '\'' sh {} +
     source_count=$(find /source/uploads -type f -o -type l | wc -l)
-    destination_count=$(find /destination -type f -o -type l | wc -l)
-    [ "$source_count" -eq "$destination_count" ] || {
-      echo "copy verification failed: source=$source_count destination=$destination_count" >&2
-      exit 1
-    }
     printf "Verified %s copied files and links\n" "$source_count"
   '
 
@@ -73,6 +84,19 @@ WHERE video_path = '/app/storage/uploads'
 COMMIT;
 SQL
 
+log "Removing migrated movie files from the old Docker volume"
+docker run --rm --entrypoint sh \
+  --mount "type=volume,source=$OLD_VOLUME,target=/source" \
+  "$APP_IMAGE" -c '
+    set -eu
+    [ -d /source/uploads ] || { echo "old /app/storage/uploads directory was not found" >&2; exit 1; }
+    find /source/uploads -mindepth 1 -delete
+    [ -z "$(find /source/uploads -mindepth 1 -print -quit)" ] || {
+      echo "old movie cleanup verification failed" >&2
+      exit 1
+    }
+  '
+
 log "Migration complete"
-log "The old Docker volume was not deleted: $OLD_VOLUME"
+log "Old movie files were removed; other runtime data remains in: $OLD_VOLUME"
 log "Restart the app with: docker compose up -d --force-recreate app"

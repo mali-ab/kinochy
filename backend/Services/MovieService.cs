@@ -143,25 +143,59 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         if(rejectedVideo is not null||rejectedHlsFiles.Count>0)throw new ApiException("Direct video and single HLS bundle uploads are disabled. Upload separate HLS quality ZIPs or select a quality-based server folder.");
         if(serverMediaPath.Length>0&&qualityZips.Count>0)throw new ApiException("Choose either HLS quality ZIPs or a server movie folder, not both.");
         if(id is null&&!isSeries&&qualityZips.Count==0&&serverMediaPath.Length==0)throw new ApiException("Add at least one HLS quality ZIP or select a quality-based server movie folder.");
-        var uploadRoot=Path.Combine(storageRoot,$"{Guid.NewGuid():N}-save");Directory.CreateDirectory(uploadRoot);
+        var year=ParseYear(form["year"].ToString());
+        var slug=BuildSlug(titleEn,year);
+        var uploadRoot=Path.Combine(storageRoot,slug);
+        var oldVideoRoot=existingMovie is null?null:existingMovie.IsEpisode?StorageEpisodeRootForPath(existingMovie.VideoPath,storageRoot):StorageRootForPath(existingMovie.VideoPath,storageRoot);
+        var oldCoverRoot=existingMovie is null?null:StorageRootForUrl(existingMovie.CoverUrl,storageRoot);
+        var sourceRoot=oldVideoRoot??oldCoverRoot;
+        var movedStorageRoot=false;
+        if(sourceRoot is not null&&!Path.GetFullPath(sourceRoot).Equals(Path.GetFullPath(uploadRoot),StringComparison.Ordinal))
+        {
+            if(Directory.Exists(uploadRoot))throw new ApiException($"Storage folder '{slug}' already exists. Resolve the existing folder before changing this movie.",409);
+            if(Directory.Exists(sourceRoot)){Directory.Move(sourceRoot,uploadRoot);movedStorageRoot=true;RebaseStorageLinks(uploadRoot,sourceRoot,uploadRoot);}
+        }
+        var rootExisted=Directory.Exists(uploadRoot);Directory.CreateDirectory(uploadRoot);
+        var createdUploadRoot=!rootExisted;
         var committed=false;
         try
         {
-        async Task<string?> Save(string key){var file=form.Files.GetFile(key);if(file is null)return null;var name=$"{Guid.NewGuid():N}{Path.GetExtension(file.FileName)}";var path=Path.Combine(uploadRoot,name);await using var output=File.Create(path);await file.CopyToAsync(output);return path;}
+        var previousVideoPath=existingMovie is null?null:MoveStoragePath(existingMovie.VideoPath,oldVideoRoot,uploadRoot);
+        var previousCoverUrl=MoveStorageUrl(existingMovie?.CoverUrl,oldCoverRoot,uploadRoot);
+        var coverFile=existingMovie is null?null:StoragePathForUrl(existingMovie.CoverUrl,storageRoot);
+        var physicalCoverFile=coverFile is not null&&movedStorageRoot&&sourceRoot is not null&&oldCoverRoot is not null&&Path.GetFullPath(sourceRoot).Equals(Path.GetFullPath(oldCoverRoot),StringComparison.Ordinal)
+            ?MoveStoragePath(coverFile,oldCoverRoot,uploadRoot):coverFile;
+        if(physicalCoverFile is not null&&File.Exists(physicalCoverFile)&&oldCoverRoot is not null&&!Path.GetFullPath(oldCoverRoot).Equals(Path.GetFullPath(uploadRoot),StringComparison.Ordinal))
+        {
+            var normalizedCover=Path.Combine(uploadRoot,"cover.jpg");
+            if(!File.Exists(normalizedCover))
+            {
+                if(sourceRoot is not null&&oldCoverRoot is not null&&Path.GetFullPath(sourceRoot).Equals(Path.GetFullPath(oldCoverRoot),StringComparison.Ordinal))File.Move(physicalCoverFile,normalizedCover);
+                else File.Copy(physicalCoverFile,normalizedCover);
+            }
+            previousCoverUrl="/media/uploads/"+Path.GetRelativePath(storageRoot,normalizedCover).Replace('\\','/');
+        }
+        else if(physicalCoverFile is not null&&File.Exists(physicalCoverFile)&&!Path.GetFileName(physicalCoverFile).Equals("cover.jpg",StringComparison.OrdinalIgnoreCase))
+        {
+            var normalizedCover=Path.Combine(uploadRoot,"cover.jpg");
+            if(!File.Exists(normalizedCover))File.Move(physicalCoverFile,normalizedCover);
+            previousCoverUrl="/media/uploads/"+Path.GetRelativePath(storageRoot,normalizedCover).Replace('\\','/');
+        }
+        async Task<string?> Save(string key){var file=form.Files.GetFile(key);if(file is null)return null;var name=key=="cover"?"cover.jpg":$"{Guid.NewGuid():N}{Path.GetExtension(file.FileName)}";var path=Path.Combine(uploadRoot,name);await using var output=File.Create(path);await file.CopyToAsync(output);return path;}
         MediaLibraryService.ImportResult? libraryImport=serverMediaPath.Length>0?await mediaLibrary.ImportAsync(serverMediaPath,uploadRoot):null;
-        var video=serverMediaPath.Length>0?libraryImport!.Playlist:qualityZips.Count>0?await HlsUpload.SaveQualityBundleAsync(qualityZips,uploadRoot,existingMovie?.VideoPath):null;
-        if(!isSeries&&string.IsNullOrWhiteSpace(video??existingMovie?.VideoPath))throw new ApiException("A standalone title requires a video with at least one quality.");
+        var video=serverMediaPath.Length>0?libraryImport!.Playlist:qualityZips.Count>0?await HlsUpload.SaveQualityBundleAsync(qualityZips,uploadRoot,previousVideoPath):null;
+        if(!isSeries&&string.IsNullOrWhiteSpace(video??previousVideoPath))throw new ApiException("A standalone title requires a video with at least one quality.");
         if(isSeries&&libraryImport is not null&&libraryImport.Episodes.Count==0)throw new ApiException("Select a series folder containing episodes, or upload each episode after saving the title.");
         if(removeQualities.Length>0)
         {
-            if(id is null||existingMovie?.VideoPath is null)throw new ApiException("Movie qualities can only be removed from an existing HLS movie.");
+            if(id is null||previousVideoPath is null)throw new ApiException("Movie qualities can only be removed from an existing HLS movie.");
             var uploadedQualities=qualityZips.Select(item=>item.Quality).ToHashSet(StringComparer.OrdinalIgnoreCase);
             var removals=removeQualities.Where(quality=>!uploadedQualities.Contains(quality)).ToArray();
-            if(removals.Length>0)video=await HlsUpload.RemoveQualitiesAsync(video??existingMovie.VideoPath,removals,uploadRoot);
+            if(removals.Length>0)video=await HlsUpload.RemoveQualitiesAsync(video??previousVideoPath,removals,uploadRoot);
         }
         var cover=await Save("cover");var en=form.Files.GetFile("subtitleEn");var ru=form.Files.GetFile("subtitleRu");
         var subtitleFiles=form.Files.Where(file=>file.Name.StartsWith("subtitle_",StringComparison.OrdinalIgnoreCase)).ToList();
-        var coverUrl=cover is null?null:"/media/uploads/"+Path.GetRelativePath(storageRoot,cover).Replace('\\','/');
+        var coverUrl=cover is null?previousCoverUrl:"/media/uploads/"+Path.GetRelativePath(storageRoot,cover).Replace('\\','/');
         if(isSeries&&(subtitleZip is not null||en is not null||ru is not null||subtitleFiles.Count>0))throw new ApiException("Add subtitles to each episode, not the series title.");
         if(subtitleZip is not null&&(en is not null||ru is not null||subtitleFiles.Count>0))throw new ApiException("Upload a subtitle ZIP or separate subtitle files, not both.");
         var subtitleSources=!isSeries&&serverMediaPath.Length>0?libraryImport!.Subtitles:new Dictionary<string,string>();
@@ -181,8 +215,11 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         try{removeSubtitleLanguages=string.IsNullOrWhiteSpace(form["removeSubtitleLanguages"].ToString())?[]:JsonSerializer.Deserialize<string[]>(form["removeSubtitleLanguages"].ToString())??[];}
         catch(JsonException){throw new ApiException("Invalid subtitle removal list.");}
         if(removeSubtitleLanguages.Any(language=>language is not ("en" or "ru" or "tk")))throw new ApiException("Subtitle language must be en, ru, or tk.");
-        var suffix=(id??Guid.NewGuid()).ToString("N")[..8];
-        var slug=System.Text.RegularExpressions.Regex.Replace(title.ToLowerInvariant(),"[^a-z0-9]+","-").Trim('-')+"-"+suffix;
+        foreach(var language in removeSubtitleLanguages)
+        {
+            var subtitleFile=Path.Combine(uploadRoot,$"subtitle.{language}.vtt");
+            if(File.Exists(subtitleFile))File.Delete(subtitleFile);
+        }
         string[] submittedGenres;
         try { submittedGenres=JsonSerializer.Deserialize<string[]>(form["genres"].ToString())??["Drama"]; }
         catch(JsonException) { throw new ApiException("Genres must be a JSON array of names."); }
@@ -192,7 +229,6 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         if(libraryImport?.Episodes.Count>0&&id is not null)throw new ApiException("A complete series folder can only be imported when creating a new series.");
         if(libraryImport?.Episodes.Count>0&&!isSeries)throw new ApiException("Choose series format to import a folder with seasons and episodes.");
         var difficulty=NormalizeDifficulty(form["difficulty"].ToString());
-        var year=ParseYear(form["year"].ToString());
         if(!decimal.TryParse(form["rating"].ToString(),System.Globalization.NumberStyles.Number,System.Globalization.CultureInfo.InvariantCulture,out var ratingValue)||ratingValue is < 0 or > 10)throw new ApiException("Rating must be between 0 and 10.");
         var countryRaw=form["country"].ToString();string country;
         try { country=countryRaw.StartsWith('[')?string.Join(", ",JsonSerializer.Deserialize<string[]>(countryRaw)??[]):countryRaw; }
@@ -210,7 +246,24 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         }
         Guid movieId;
         if(id is null){if(video is null&&!isSeries)throw new ApiException("Video is required");const string sql="""INSERT INTO movies(slug,title,original_title,description,year,country,genre,genres,type,duration,rating,difficulty,accent,age_rating,cover_url,video_path,title_tm,title_en,title_ru,description_tm,description_en,description_ru) VALUES(@slug,@title,@original,@description,@year,@country,@genre,@genres::jsonb,@type,@duration,@rating,@difficulty,@accent,@age,@cover,@video,@titleTm,@titleEn,@titleRu,@descriptionTm,@descriptionEn,@descriptionRu) RETURNING id""";await using var q=connection.Command(sql,("slug",slug),("title",title),("original",form["originalTitle"].ToString()),("description",descriptionEn),("year",year),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",movieType),("duration",form["duration"].ToString()),("rating",ratingValue),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",coverUrl),("video",video??""),("titleTm",titleTm),("titleEn",titleEn),("titleRu",titleRu),("descriptionTm",descriptionTm),("descriptionEn",descriptionEn),("descriptionRu",descriptionRu));movieId=(Guid)(await q.ExecuteScalarAsync())!;}
-        else{movieId=id.Value;const string sql="""UPDATE movies SET title=@title,original_title=@original,description=@description,title_tm=@titleTm,title_en=@titleEn,title_ru=@titleRu,description_tm=@descriptionTm,description_en=@descriptionEn,description_ru=@descriptionRu,year=@year,country=@country,genre=@genre,genres=@genres::jsonb,type=@type,duration=@duration,rating=@rating,difficulty=@difficulty,accent=@accent,age_rating=@age,cover_url=coalesce(@cover,cover_url),video_path=coalesce(@video,video_path),updated_at=now() WHERE id=@id""";await using var q=connection.Command(sql,("id",movieId),("title",title),("original",form["originalTitle"].ToString()),("description",descriptionEn),("titleTm",titleTm),("titleEn",titleEn),("titleRu",titleRu),("descriptionTm",descriptionTm),("descriptionEn",descriptionEn),("descriptionRu",descriptionRu),("year",year),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",movieType),("duration",form["duration"].ToString()),("rating",ratingValue),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",coverUrl),("video",video));if(await q.ExecuteNonQueryAsync()==0)throw new ApiException("Movie not found",404);}
+        else{movieId=id.Value;const string sql="""UPDATE movies SET slug=@slug,title=@title,original_title=@original,description=@description,title_tm=@titleTm,title_en=@titleEn,title_ru=@titleRu,description_tm=@descriptionTm,description_en=@descriptionEn,description_ru=@descriptionRu,year=@year,country=@country,genre=@genre,genres=@genres::jsonb,type=@type,duration=@duration,rating=@rating,difficulty=@difficulty,accent=@accent,age_rating=@age,cover_url=@cover,video_path=@video,updated_at=now() WHERE id=@id""";await using var q=connection.Command(sql,("id",movieId),("slug",slug),("title",title),("original",form["originalTitle"].ToString()),("description",descriptionEn),("titleTm",titleTm),("titleEn",titleEn),("titleRu",titleRu),("descriptionTm",descriptionTm),("descriptionEn",descriptionEn),("descriptionRu",descriptionRu),("year",year),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("type",movieType),("duration",form["duration"].ToString()),("rating",ratingValue),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",coverUrl),("video",video??previousVideoPath));if(await q.ExecuteNonQueryAsync()==0)throw new ApiException("Movie not found",404);}
+        if(id is not null&&movedStorageRoot&&existingMovie is not null)
+        {
+            var oldVideoPrefix=StoragePrefixForPath(existingMovie.VideoPath,storageRoot,existingMovie.IsEpisode?oldVideoRoot:null);
+            if(oldVideoPrefix is not null)
+            {
+                var newVideoPrefix=uploadRoot;
+                await using var moveRelatedVideos=connection.Command("UPDATE movies SET video_path=@newPrefix||substring(video_path from char_length(@oldPrefix)+1) WHERE id<>@id AND video_path LIKE @oldPrefix||'/%'",("newPrefix",newVideoPrefix),("oldPrefix",oldVideoPrefix),("id",movieId));
+                await moveRelatedVideos.ExecuteNonQueryAsync();
+            }
+            var oldCoverPrefix=StoragePrefixForUrl(existingMovie.CoverUrl);
+            if(oldCoverPrefix is not null&&sourceRoot is not null&&oldCoverRoot is not null&&Path.GetFullPath(sourceRoot).Equals(Path.GetFullPath(oldCoverRoot),StringComparison.Ordinal))
+            {
+                var newCoverPrefix="/media/uploads/"+slug;
+                await using var moveRelatedCovers=connection.Command("UPDATE movies SET cover_url=@newPrefix||substring(cover_url from char_length(@oldPrefix)+1) WHERE id<>@id AND cover_url LIKE @oldPrefix||'/%'",("newPrefix",newCoverPrefix),("oldPrefix",oldCoverPrefix),("id",movieId));
+                await moveRelatedCovers.ExecuteNonQueryAsync();
+            }
+        }
         await using(var formatCommand=connection.Command("UPDATE movies SET is_series=@series WHERE id=@id",("series",isSeries),("id",movieId)))
             await formatCommand.ExecuteNonQueryAsync();
         if(id is not null&&existingMovie?.Type.Equals("Episode",StringComparison.OrdinalIgnoreCase)==true)
@@ -235,7 +288,7 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
             await using var relationCommand=connection.Command(relationSql,("series",seriesId),("movie",movieId),("season",relationSeason),("episode",relationEpisode),("title",title));
             if(await relationCommand.ExecuteScalarAsync() is null)throw new ApiException("Could not add the episode. Check that the series, season, and episode number are valid.",409);
         }
-        async Task SaveSubtitles(Guid targetId,Dictionary<string,string> sources){foreach(var item in sources){var cues=SubtitleParser.Parse(item.Value);if(cues.Count==0)throw new ApiException($"{item.Key.ToUpperInvariant()} subtitle file has no valid cues.");await using var q=connection.Command("INSERT INTO subtitles(movie_id,language,cues) VALUES(@id,@language,@cues::jsonb) ON CONFLICT(movie_id,language) DO UPDATE SET cues=excluded.cues",("id",targetId),("language",item.Key),("cues",JsonSerializer.Serialize(cues,SubtitleJson)));await q.ExecuteNonQueryAsync();}}
+        async Task SaveSubtitles(Guid targetId,Dictionary<string,string> sources){foreach(var item in sources){var cues=SubtitleParser.Parse(item.Value);if(cues.Count==0)throw new ApiException($"{item.Key.ToUpperInvariant()} subtitle file has no valid cues.");var subtitlePath=Path.Combine(uploadRoot,$"subtitle.{item.Key}.vtt");await File.WriteAllTextAsync(subtitlePath,SubtitleParser.ToVtt(cues));await using var q=connection.Command("INSERT INTO subtitles(movie_id,language,cues) VALUES(@id,@language,@cues::jsonb) ON CONFLICT(movie_id,language) DO UPDATE SET cues=excluded.cues",("id",targetId),("language",item.Key),("cues",JsonSerializer.Serialize(cues,SubtitleJson)));await q.ExecuteNonQueryAsync();}}
         await SaveSubtitles(movieId,subtitleSources);
         if(removeSubtitleLanguages.Length>0){await using var removeSubtitles=connection.Command("DELETE FROM subtitles WHERE movie_id=@id AND language=ANY(@languages)",("id",movieId),("languages",removeSubtitleLanguages));await removeSubtitles.ExecuteNonQueryAsync();}
         if(libraryImport?.Episodes.Count>0)
@@ -245,7 +298,7 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
                 var episodeTitle=$"{titleEn} — {episode.Title}";
                 var episodeTitleTm=$"{titleTm} — {episode.Title}";
                 var episodeTitleRu=$"{titleRu} — {episode.Title}";
-                var episodeSlug=System.Text.RegularExpressions.Regex.Replace(episodeTitle.ToLowerInvariant(),"[^a-z0-9]+","-").Trim('-')+"-"+Guid.NewGuid().ToString("N")[..8];
+                var episodeSlug=BuildSlug(episodeTitle,year);
                 const string episodeSql="""INSERT INTO movies(slug,title,original_title,description,year,country,genre,genres,type,duration,rating,difficulty,accent,age_rating,cover_url,video_path,title_tm,title_en,title_ru,description_tm,description_en,description_ru) VALUES(@slug,@title,@title,@description,@year,@country,@genre,@genres::jsonb,'Episode',@duration,@rating,@difficulty,@accent,@age,@cover,@video,@titleTm,@titleEn,@titleRu,@descriptionTm,@descriptionEn,@descriptionRu) RETURNING id""";
                 await using var episodeCommand=connection.Command(episodeSql,("slug",episodeSlug),("title",episodeTitle),("description",descriptionEn),("year",year),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("duration",form["duration"].ToString()),("rating",ratingValue),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",coverUrl),("video",episode.Playlist),("titleTm",episodeTitleTm),("titleEn",episodeTitle),("titleRu",episodeTitleRu),("descriptionTm",descriptionTm),("descriptionEn",descriptionEn),("descriptionRu",descriptionRu));
                 var episodeId=(Guid)(await episodeCommand.ExecuteScalarAsync())!;
@@ -260,7 +313,120 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         }
         finally
         {
-            if(!committed&&Directory.Exists(uploadRoot))Directory.Delete(uploadRoot,recursive:true);
+        if(!committed&&movedStorageRoot&&sourceRoot is not null&&Directory.Exists(uploadRoot)&&!Directory.Exists(sourceRoot))
+        {
+            Directory.Move(uploadRoot,sourceRoot);
+            RebaseStorageLinks(sourceRoot,uploadRoot,sourceRoot);
+        }
+        else if(!committed&&createdUploadRoot&&Directory.Exists(uploadRoot))Directory.Delete(uploadRoot,recursive:true);
+        }
+    }
+
+    internal static string BuildSlug(string title,int year)
+    {
+        var slug=System.Text.RegularExpressions.Regex.Replace(title.ToLowerInvariant(),"[^a-z0-9]+","-").Trim('-');
+        return string.IsNullOrWhiteSpace(slug)?$"movie-{year}":$"{slug}-{year}";
+    }
+
+    private static string? StorageRootForPath(string path,string root)
+    {
+        if(string.IsNullOrWhiteSpace(path))return null;
+        var normalized=path.Replace('\\','/');var normalizedRoot=Path.GetFullPath(root).Replace('\\','/').TrimEnd('/');
+        string relative;
+        if(normalized.StartsWith(normalizedRoot+"/",StringComparison.Ordinal))relative=normalized[(normalizedRoot.Length+1)..];
+        else
+        {
+            const string marker="/storage/uploads/";var index=normalized.IndexOf(marker,StringComparison.OrdinalIgnoreCase);
+            if(index<0)return null;relative=normalized[(index+marker.Length)..];
+        }
+        var folder=relative.Split('/',StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return string.IsNullOrWhiteSpace(folder)||folder is "." or ".."?null:Path.Combine(root,folder);
+    }
+
+    private static string? StorageEpisodeRootForPath(string path,string root)
+    {
+        var resolved=ResolveStoragePath(path,root);return resolved is null?null:Path.GetDirectoryName(resolved);
+    }
+
+    private static string? ResolveStoragePath(string path,string root)
+    {
+        if(string.IsNullOrWhiteSpace(path))return null;
+        var normalized=path.Replace('\\','/');var normalizedRoot=Path.GetFullPath(root).Replace('\\','/').TrimEnd('/');
+        if(normalized.StartsWith(normalizedRoot+"/",StringComparison.Ordinal))return path;
+        const string marker="/storage/uploads/";var index=normalized.IndexOf(marker,StringComparison.OrdinalIgnoreCase);
+        if(index<0)return null;var relative=normalized[(index+marker.Length)..];
+        if(relative.Split('/').Any(part=>part is "" or "." or ".."))return null;
+        return Path.Combine(root,relative.Replace('/',Path.DirectorySeparatorChar));
+    }
+
+    private static string? StorageRootForUrl(string? url,string root)
+    {
+        var path=StoragePathForUrl(url,root);return path is null?null:StorageRootForPath(path,root);
+    }
+
+    private static string? StoragePathForUrl(string? url,string root)
+    {
+        if(string.IsNullOrWhiteSpace(url)||!url.StartsWith("/media/uploads/",StringComparison.Ordinal))return null;
+        var segments=url["/media/uploads/".Length..].Split('/',StringSplitOptions.RemoveEmptyEntries).Select(Uri.UnescapeDataString).ToArray();
+        if(segments.Length==0||segments.Any(segment=>segment is "." or ".."||segment.Contains('/')||segment.Contains('\\')))return null;
+        return Path.Combine(root,Path.Combine(segments));
+    }
+
+    private static string? StoragePrefixForPath(string path,string root,string? rootOverride=null)
+    {
+        var folder=rootOverride??StorageRootForPath(path,root);if(folder is null)return null;
+        var normalized=path.Replace('\\','/');var fullRoot=Path.GetFullPath(root).Replace('\\','/').TrimEnd('/')+"/";
+        if(normalized.StartsWith(fullRoot,StringComparison.Ordinal))return Path.GetFullPath(folder);
+        const string marker="/storage/uploads/";var index=normalized.IndexOf(marker,StringComparison.OrdinalIgnoreCase);
+        if(index<0)return null;var relative=Path.GetRelativePath(root,folder).Replace('\\','/');
+        if(relative is "." or ".."||relative.StartsWith("../",StringComparison.Ordinal))return null;
+        return normalized[..(index+marker.Length)]+relative;
+    }
+
+    private static string? StoragePrefixForUrl(string? url)
+    {
+        if(string.IsNullOrWhiteSpace(url)||!url.StartsWith("/media/uploads/",StringComparison.Ordinal))return null;
+        var remainder=url["/media/uploads/".Length..];var first=remainder.Split('/',StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        return first is null?null:"/media/uploads/"+first;
+    }
+
+    private static string? MoveStorageUrl(string? url,string? oldRoot,string newRoot)
+    {
+        if(string.IsNullOrWhiteSpace(url)||oldRoot is null||!url.StartsWith("/media/uploads/",StringComparison.Ordinal))return url;
+        var relative=url["/media/uploads/".Length..];var oldName=Path.GetFileName(oldRoot);
+        if(!relative.Equals(oldName,StringComparison.Ordinal)&&!relative.StartsWith(oldName+"/",StringComparison.Ordinal))return url;
+        var remainder=relative.Length==oldName.Length?"":relative[(oldName.Length+1)..];
+        return "/media/uploads/"+Path.GetFileName(newRoot)+(remainder.Length==0?"":"/"+remainder);
+    }
+
+    private static string? MoveStoragePath(string? path,string? oldRoot,string newRoot)
+    {
+        if(string.IsNullOrWhiteSpace(path)||oldRoot is null)return path;
+        var normalized=path.Replace('\\','/');var fullOld=Path.GetFullPath(oldRoot).Replace('\\','/').TrimEnd('/')+"/";
+        if(normalized.StartsWith(fullOld,StringComparison.Ordinal))return Path.Combine(newRoot,normalized[fullOld.Length..].Replace('/',Path.DirectorySeparatorChar));
+        const string marker="/storage/uploads/";var index=normalized.IndexOf(marker,StringComparison.OrdinalIgnoreCase);
+        if(index<0)return path;
+        var relative=normalized[(index+marker.Length)..];var oldName=Path.GetFileName(oldRoot);
+        if(!relative.Equals(oldName,StringComparison.Ordinal)&&!relative.StartsWith(oldName+"/",StringComparison.Ordinal))return path;
+        var remainder=relative.Length==oldName.Length?"":relative[(oldName.Length+1)..];
+        return remainder.Length==0?newRoot:Path.Combine(newRoot,remainder.Replace('/',Path.DirectorySeparatorChar));
+    }
+
+    private static void RebaseStorageLinks(string root,string oldRoot,string newRoot)
+    {
+        var oldPrefix=Path.GetFullPath(oldRoot)+Path.DirectorySeparatorChar;
+        foreach(var entry in Directory.EnumerateFileSystemEntries(root,"*",SearchOption.AllDirectories))
+        {
+            var directoryInfo=new DirectoryInfo(entry);var directoryLink=directoryInfo.LinkTarget;
+            FileSystemInfo info=directoryLink is not null?directoryInfo:new FileInfo(entry);
+            var linkTarget=directoryLink??info.LinkTarget;
+            if(string.IsNullOrWhiteSpace(linkTarget)||!Path.IsPathRooted(linkTarget))continue;
+            var target=Path.GetFullPath(linkTarget);
+            if(!target.StartsWith(oldPrefix,StringComparison.Ordinal))continue;
+            var rebased=Path.Combine(newRoot,Path.GetRelativePath(oldRoot,target));
+            info.Delete();
+            if(directoryLink is not null)Directory.CreateSymbolicLink(entry,rebased);
+            else File.CreateSymbolicLink(entry,rebased);
         }
     }
 

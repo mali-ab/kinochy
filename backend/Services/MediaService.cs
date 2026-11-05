@@ -83,6 +83,19 @@ public sealed class MediaService(MovieService movies, IWebHostEnvironment enviro
         return path;
     }
 
+    public string? AccelerationUri(string path)
+    {
+        // Local Vite development proxies do not process X-Accel-Redirect.
+        // Serve the file through ASP.NET unless a production Nginx proxy is in front.
+        if(environment.IsDevelopment())return null;
+        var root=uploadsRoot.TrimEnd(Path.DirectorySeparatorChar)+Path.DirectorySeparatorChar;
+        var fullPath=Path.GetFullPath(path);
+        if(!fullPath.StartsWith(root,StringComparison.Ordinal))return null;
+        var relative=Path.GetRelativePath(uploadsRoot,fullPath).Replace('\\','/');
+        if(relative.Split('/').Any(part=>part is "" or "." or ".."))return null;
+        return "/_protected_media/"+string.Join('/',relative.Split('/').Select(Uri.EscapeDataString));
+    }
+
     private string ResolveStoredPath(string storedPath)
     {
         if(File.Exists(storedPath))return storedPath;

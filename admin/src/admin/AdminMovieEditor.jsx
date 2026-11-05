@@ -246,7 +246,7 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
   return (
     <form className="admin-form" onSubmit={submit}>
       <div className="admin-list-head admin-editor-heading">
-        <div><span className="admin-editor-eyebrow">Dilewar studio / Movie library</span><h2>{relation ? `Add episode ${relation.episodeNumber}` : movie?.type === 'Episode' ? 'Edit episode media' : movie ? 'Edit movie' : 'Add a movie'}</h2><p>{qualityOnly ? 'Manage the video qualities and subtitles for this episode.' : 'Set up the details, choose a playback source, then publish.'}</p></div>
+        <div><span className="admin-editor-eyebrow">Kinoçy studio / Movie library</span><h2>{relation ? `Add episode ${relation.episodeNumber}` : movie?.type === 'Episode' ? 'Edit episode media' : movie ? 'Edit movie' : 'Add a movie'}</h2><p>{qualityOnly ? 'Manage the video qualities and subtitles for this episode.' : 'Set up the details, choose a playback source, then publish.'}</p></div>
         <button type="button" onClick={onCancel}>Cancel</button>
       </div>
       {relation ? <p className="form-message">Adding episode {relation.episodeNumber} to {relation.seriesTitle || 'series'}, season {relation.seasonNumber}. Saving will link this movie automatically.</p> : null}
@@ -304,7 +304,7 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
           <select aria-label="Video quality" value={item.quality} disabled={item.existing} onChange={(event) => setQualityUploads((value) => value.map((entry) => entry.id === item.id ? { ...entry, quality: event.target.value } : entry))}>{movieQualityOptions.map((quality) => <option key={quality} value={quality} disabled={qualityUploads.some((entry) => entry.id !== item.id && entry.quality === quality)}>{quality === '2160p' ? '2160p · 4K' : quality === '1440p' ? '1440p · 2K' : quality}</option>)}</select>
           <label className={item.existing && !item.file ? 'quality-saved' : ''}><Upload size={17} /><span>{item.file ? item.file.name : item.existing ? `${item.quality} uploaded · choose ZIP to replace` : `${item.quality} HLS ZIP`}</span><input type="file" accept=".zip,application/zip" onChange={(event) => { const file = event.target.files[0] || null; setQualityUploads((value) => value.map((entry) => entry.id === item.id ? { ...entry, file } : entry)); event.target.value = ''; }} /></label>
           {item.existing && item.file ? <button type="button" className="quality-remove" onClick={() => setQualityUploads((value) => value.map((entry) => entry.id === item.id ? { ...entry, file: null } : entry))}>Cancel</button> : <button type="button" className="quality-remove" onClick={() => setQualityUploads((value) => value.filter((entry) => entry.id !== item.id))}>Remove</button>}
-        </div>)}</div> : <p className="quality-upload-empty">Use this when your converter produces separate 360p, 720p, 1080p, or 4K ZIP bundles. Dilewar creates the adaptive master playlist automatically.</p>}
+        </div>)}</div> : <p className="quality-upload-empty">Use this when your converter produces separate 360p, 720p, 1080p, or 4K ZIP bundles. Kinoçy creates the adaptive master playlist automatically.</p>}
       </div> : null}
       {form.isSeries && sourceType === 'hls' ? <p className="source-note bundle-note"><strong>Series workflow:</strong> publish the series title first. On its details page, create seasons and then add playable episodes inside each season.</p> : null}
 

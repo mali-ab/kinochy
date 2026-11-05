@@ -1,6 +1,6 @@
-# Dilewar
+# Kinoçy
 
-Dilewar is a movie-based English learning platform with streaming playback, interactive subtitles, word translation, vocabulary saving, user authentication, and an admin panel for managing movies and subtitle files.
+Kinoçy is a movie-based English learning platform with streaming playback, interactive subtitles, word translation, vocabulary saving, user authentication, and an admin panel for managing movies and subtitle files.
 
 ## Stack
 
@@ -97,7 +97,7 @@ JWT_SECRET=your-local-secret \
 dotnet run --project backend/Kinochy.Api.csproj
 ```
 
-Running only the backend provides the JSON API and media endpoints; it does not provide the Dilewar website UI. Uploaded files are kept in `MOVIE_STORAGE_PATH`, or `backend/storage/uploads` when it is unset.
+Running only the backend provides the JSON API and media endpoints; it does not provide the Kinoçy website UI. Uploaded files are kept in `MOVIE_STORAGE_PATH`, or `backend/storage/uploads` when it is unset.
 
 ## Run the Full Application Without Docker
 
@@ -115,11 +115,11 @@ npm install --prefix admin
 npm run dev:admin
 ```
 
-The admin SPA runs on `http://localhost:5174/admin` and proxies `/api` and `/media` to `VITE_API_ORIGIN` (default `http://localhost:4000`). In the public site set `NEXT_PUBLIC_ADMIN_URL=http://localhost:5174/admin` (see `frontend/.env.example`) so the Admin nav link points at the dev server.
+The admin SPA runs on `http://localhost:5174/admin` and proxies `/api` and `/media` to `VITE_API_ORIGIN` (default `http://localhost:5000`, the local Development API). To manage movies already uploaded to another server, set `VITE_API_ORIGIN` in `admin/.env` to that server's API origin before starting Vite, then restart the dev server. In the public site set `NEXT_PUBLIC_ADMIN_URL=http://localhost:5174/admin` (see `frontend/.env.example`) so the Admin nav link points at the dev server.
 
 Open `http://localhost:5173`. Check the API at `http://localhost:4000/api/health`. The Next.js server proxies `/api` and `/media` to `API_ORIGIN` (default `http://localhost:4000`) so browser requests stay same-origin; set `API_ORIGIN` before starting Next.js when the API runs at another address.
 
-For local runs, set the backend variables in the process environment as shown above. `.env` is read by Docker Compose, but the ASP.NET app does not load that file on its own. Set `MOVIE_STORAGE_PATH` to an absolute writable directory; otherwise uploads use `backend/storage/uploads`.
+In Development, the ASP.NET app loads the project-root `.env` file; process environment variables take precedence. Set `MOVIE_STORAGE_PATH` there to an absolute directory writable by the user running the backend. If it is unset, uploads use `backend/storage/uploads`.
 
 ## Docker Deployment
 
@@ -172,9 +172,11 @@ docker compose logs -f app
 
 Compose runs PostgreSQL, `app` (ASP.NET Core API), and `edge` (nginx, public on port 4000). The edge serves the admin SPA and proxies `/api` and `/media` to the API. The separate Next.js frontend is not included in this Compose stack.
 
-### Build images locally, then deploy
+### Deploy the API and admin without Docker
 
-Copy `.deploy.env.example` to `.deploy.env` and set the SSH host, user, and authentication. Run `./deploy.sh` from a machine with Docker Compose, SSH, and rsync. The script checks that the local and server Docker platforms match, builds `app` and `edge` locally, uploads the project files and both Docker images, then starts the server with `docker compose up -d --no-build`. PostgreSQL and the named data volumes stay on the server. If `DEPLOY_SSH_PASSWORD` is set, `sshpass` is also required locally.
+Copy `.deploy.env.example` to `.deploy.env` and set the SSH host, user, authentication, and `DEPLOY_SERVER_NAME`. Run `./deploy.sh` from a machine with the .NET 10 SDK, Node.js/npm, SSH, and rsync. The script builds the admin SPA and publishes the API locally, syncs only those release artifacts, switches a `current` symlink, installs/restarts a systemd API service, and reloads the host Nginx site. It does not build or run the API in Docker. PostgreSQL remains in the existing Compose service and is exposed only on `127.0.0.1:5432`; configure the server `.env` with the PostgreSQL credentials and `MOVIE_STORAGE_PATH`. The deploy account needs passwordless sudo for Nginx and systemd setup, plus the .NET 10 runtime and Nginx installed on the server.
+
+This repository snapshot does not contain the separate Next.js public frontend source. The deployed site root serves the admin SPA; add the frontend build artifact and its Nginx route when that source is available.
 
 ## Persistent Data
 
@@ -192,7 +194,7 @@ After setting `MOVIE_STORAGE_PATH`, migrate assets from the former Docker volume
 docker compose up -d --force-recreate app
 ```
 
-The migration refuses a non-empty destination, verifies the copied file count, updates existing `movies.video_path` values, and retains the old Docker volume as a rollback copy.
+The migration can resume into a non-empty destination without overwriting files. It verifies that existing files match, updates existing `movies.video_path` values, and then removes only the old volume's uploaded movie files. Runtime previews and other volume data remain intact.
 
 Large local HLS bundles can be kept outside the Docker volume in `backend/storage/preloaded/<movie>/`. Add a `movie.json` containing `title` and `playlist`; Compose mounts this directory read-only and startup connects the playlist to the movie with that exact title.
 
