@@ -14,6 +14,8 @@ set +a
 
 DEPLOY_HOST="${DEPLOY_HOST:-}"
 [[ -n "$DEPLOY_HOST" ]] || die "DEPLOY_HOST is not set in $ENV_FILE"
+DEPLOY_REPO="${DEPLOY_REPO:-https://github.com/mali-ab/kinochy.git}"
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 DEPLOY_USER="${DEPLOY_USER:-kinochy}"
 DEPLOY_PORT="${DEPLOY_PORT:-22}"
 DEPLOY_PATH="${DEPLOY_PATH:-/home/$DEPLOY_USER/kinochy}"
@@ -28,13 +30,12 @@ fi
 DEPLOY_SERVER_NAME="${DEPLOY_SERVER_NAME:-$DEPLOY_HOST}"
 DEPLOY_API_PORT="${DEPLOY_API_PORT:-4000}"
 DEPLOY_APP_ENV="${DEPLOY_APP_ENV:-}"
-DEPLOY_COMPOSE_FILE="${DEPLOY_COMPOSE_FILE:-docker-compose.yml}"
-DEPLOY_COMPOSE_CMD="${DEPLOY_COMPOSE_CMD:-docker compose}"
+POSTGRES_DB="${POSTGRES_DB:-kinochy}"
+POSTGRES_USER="${POSTGRES_USER:-kinochy}"
+POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 
 command -v ssh >/dev/null 2>&1 || die "ssh is not installed"
 command -v rsync >/dev/null 2>&1 || die "rsync is not installed"
-command -v dotnet >/dev/null 2>&1 || die ".NET SDK is not installed locally"
-command -v npm >/dev/null 2>&1 || die "npm is not installed locally"
 if [[ "$DEPLOY_SSH_KEY" == "~/"* ]]; then DEPLOY_SSH_KEY="$HOME/${DEPLOY_SSH_KEY#\~/}"; fi
 
 SSH_OPTS=(-p "$DEPLOY_PORT" -o "StrictHostKeyChecking=$DEPLOY_STRICT_HOST_KEY_CHECKING" -o ConnectTimeout=10 -o ServerAliveInterval=20)
@@ -53,25 +54,29 @@ REMOTE="${DEPLOY_USER}@${DEPLOY_HOST}"
 shell_quote() { printf "'%s'" "${1//\'/\'\\\'\'}"; }
 REMOTE_DIR_Q="$(shell_quote "$DEPLOY_PATH")"
 
-BUILD_DIR="$(mktemp -d "${TMPDIR:-/tmp}/kinochy-deploy.XXXXXX")"
-cleanup() { rm -rf -- "$BUILD_DIR"; }
-trap cleanup EXIT
-
-log "Building admin assets and publishing API locally"
-npm run build --prefix "$ROOT_DIR/admin"
-dotnet publish "$ROOT_DIR/backend/Kinochy.Api.csproj" -c Release --no-restore -o "$BUILD_DIR/api"
-mkdir -p "$BUILD_DIR/admin"
-cp -a "$ROOT_DIR/admin/dist/." "$BUILD_DIR/admin/"
-
 log "Preparing release directory on $REMOTE"
 "${SSH[@]}" "$REMOTE" "mkdir -p -- $REMOTE_DIR_Q/releases"
+log "Cloning $DEPLOY_REPO ($DEPLOY_BRANCH) on the server"
+DEPLOY_REPO_Q="$(shell_quote "$DEPLOY_REPO")"
+DEPLOY_BRANCH_Q="$(shell_quote "$DEPLOY_BRANCH")"
+SOURCE_PATH="$DEPLOY_PATH/source"
+SOURCE_PATH_Q="$(shell_quote "$SOURCE_PATH")"
+"${SSH[@]}" "$REMOTE" "if [[ -d $SOURCE_PATH_Q/.git ]]; then git -C $SOURCE_PATH_Q fetch --prune origin; else if [[ -e $SOURCE_PATH_Q ]] && [[ -n \$(ls -A $SOURCE_PATH_Q 2>/dev/null) ]]; then echo 'Source path exists and is not a Git checkout: $SOURCE_PATH' >&2; exit 1; fi; git clone --branch $DEPLOY_BRANCH_Q --single-branch $DEPLOY_REPO_Q $SOURCE_PATH_Q; fi; git -C $SOURCE_PATH_Q remote set-url origin $DEPLOY_REPO_Q; git -C $SOURCE_PATH_Q checkout -B $DEPLOY_BRANCH_Q origin/$DEPLOY_BRANCH_Q; git -C $SOURCE_PATH_Q reset --hard origin/$DEPLOY_BRANCH_Q"
 RELEASE_ID="$(date -u +%Y%m%d%H%M%S)-$$"
 REMOTE_RELEASE="$DEPLOY_PATH/releases/$RELEASE_ID"
 REMOTE_RELEASE_Q="$(shell_quote "$REMOTE_RELEASE")"
 "${SSH[@]}" "$REMOTE" "mkdir -p -- $REMOTE_RELEASE_Q/api $REMOTE_RELEASE_Q/admin"
-rsync -az --delete -e "$RSYNC_SSH_CMD" "$BUILD_DIR/api/" "$REMOTE:$REMOTE_RELEASE/api/"
-rsync -az --delete -e "$RSYNC_SSH_CMD" "$BUILD_DIR/admin/" "$REMOTE:$REMOTE_RELEASE/admin/"
-rsync -az -e "$RSYNC_SSH_CMD" "$ROOT_DIR/$DEPLOY_COMPOSE_FILE" "$REMOTE:$DEPLOY_PATH/$DEPLOY_COMPOSE_FILE"
+"${SSH[@]}" "$REMOTE" "bash -s -- $SOURCE_PATH_Q $REMOTE_RELEASE_Q" <<'BUILD_EOF'
+set -euo pipefail
+source_path="$1"
+release="$2"
+command -v npm >/dev/null 2>&1 || { echo 'Node.js/npm is required on the server' >&2; exit 1; }
+command -v dotnet >/dev/null 2>&1 || { echo '.NET SDK is required on the server to build the cloned repository' >&2; exit 1; }
+if [[ -f "$source_path/admin/package-lock.json" ]]; then npm ci --prefix "$source_path/admin"; else npm install --prefix "$source_path/admin"; fi
+npm run build --prefix "$source_path/admin"
+dotnet publish "$source_path/backend/Kinochy.Api.csproj" -c Release -o "$release/api"
+cp -a "$source_path/admin/dist/." "$release/admin/"
+BUILD_EOF
 
 if [[ -n "$DEPLOY_APP_ENV" ]]; then
   LOCAL_APP_ENV="$ROOT_DIR/$DEPLOY_APP_ENV"
@@ -89,32 +94,33 @@ service_user="$3"
 site_name="$4"
 server_name="$5"
 api_port="$6"
-compose_file="$7"
-compose_cmd="$8"
+postgres_db="$7"
+postgres_user="$8"
+postgres_password="$9"
 
 test -f "$deploy_path/.env" || { echo "Missing $deploy_path/.env; it must define JWT_SECRET and MOVIE_STORAGE_PATH" >&2; exit 1; }
-for command in dotnet nginx systemctl; do command -v "$command" >/dev/null 2>&1 || { echo "Missing server command: $command" >&2; exit 1; }; done
+for command in dotnet nginx systemctl apt-get; do command -v "$command" >/dev/null 2>&1 || { echo "Missing server command: $command" >&2; exit 1; }; done
 sudo -n -v || { echo "The deploy user needs passwordless sudo for systemd and Nginx setup" >&2; exit 1; }
 
 dotenv_value() {
     sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$deploy_path/.env" | tail -n 1 | sed -e 's/[[:space:]]*#.*$//' -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
 }
 movie_storage_path="$(dotenv_value MOVIE_STORAGE_PATH)"
-database_url="$(dotenv_value DATABASE_URL)"
 test -n "$movie_storage_path" || { echo "MOVIE_STORAGE_PATH is missing in $deploy_path/.env" >&2; exit 1; }
-if command -v docker >/dev/null 2>&1; then
-    (cd "$deploy_path" && $compose_cmd -f "$compose_file" stop app edge >/dev/null 2>&1 || true)
-fi
-if [ -z "$database_url" ]; then
-    postgres_db="$(dotenv_value POSTGRES_DB)"
-    postgres_user="$(dotenv_value POSTGRES_USER)"
-    postgres_password="$(dotenv_value POSTGRES_PASSWORD)"
-    test -n "$postgres_db" && test -n "$postgres_user" && test -n "$postgres_password" || { echo "Set DATABASE_URL or POSTGRES_DB/POSTGRES_USER/POSTGRES_PASSWORD in the server .env" >&2; exit 1; }
-    command -v docker >/dev/null 2>&1 || { echo "Docker Compose is needed to keep the current PostgreSQL service, or set DATABASE_URL for an external database" >&2; exit 1; }
-    (cd "$deploy_path" && $compose_cmd -f "$compose_file" up -d postgres)
-    quote_conn_value() { printf '"%s"' "$(printf '%s' "$1" | sed 's/"/""/g')"; }
-    database_url="Host=127.0.0.1;Port=5432;Database=$(quote_conn_value "$postgres_db");Username=$(quote_conn_value "$postgres_user");Password=$(quote_conn_value "$postgres_password")"
-fi
+test -n "$postgres_db" && test -n "$postgres_user" && test -n "$postgres_password" || { echo "Set POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD in .deploy.env" >&2; exit 1; }
+sudo apt-get update
+sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql postgresql-client
+sudo systemctl enable --now postgresql
+sudo -u postgres psql -v ON_ERROR_STOP=1 --set=db="$postgres_db" --set=role="$postgres_user" --set=password="$postgres_password" <<'SQL'
+SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'password')
+WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role')\gexec
+SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role', :'password')\gexec
+SELECT format('CREATE DATABASE %I OWNER %I', :'db', :'role')
+WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'db')\gexec
+SELECT format('ALTER DATABASE %I OWNER TO %I', :'db', :'role')\gexec
+SQL
+quote_conn_value() { printf '"%s"' "$(printf '%s' "$1" | sed 's/"/""/g')"; }
+database_url="Host=127.0.0.1;Port=5432;Database=$(quote_conn_value "$postgres_db");Username=$(quote_conn_value "$postgres_user");Password=$(quote_conn_value "$postgres_password")"
 printf 'DATABASE_URL="%s"\n' "$(printf '%s' "$database_url" | sed 's/\\/\\\\/g; s/"/\\"/g')" | sudo tee /etc/kinochy-api.env >/dev/null
 sudo chmod 0600 /etc/kinochy-api.env
 
@@ -216,6 +222,6 @@ echo "API health check passed"
 REMOTE_EOF
 )
 
-"${SSH[@]}" "$REMOTE" "bash -s -- $REMOTE_RELEASE_Q $(shell_quote "$DEPLOY_PATH") $(shell_quote "$DEPLOY_USER") $(shell_quote "$DEPLOY_NGINX_SITE_NAME") $(shell_quote "$DEPLOY_SERVER_NAME") $(shell_quote "$DEPLOY_API_PORT") $(shell_quote "$DEPLOY_COMPOSE_FILE") $(shell_quote "$DEPLOY_COMPOSE_CMD")" <<<"$REMOTE_SCRIPT"
+"${SSH[@]}" "$REMOTE" "bash -s -- $REMOTE_RELEASE_Q $(shell_quote "$DEPLOY_PATH") $(shell_quote "$DEPLOY_USER") $(shell_quote "$DEPLOY_NGINX_SITE_NAME") $(shell_quote "$DEPLOY_SERVER_NAME") $(shell_quote "$DEPLOY_API_PORT") $(shell_quote "$POSTGRES_DB") $(shell_quote "$POSTGRES_USER") $(shell_quote "$POSTGRES_PASSWORD")" <<<"$REMOTE_SCRIPT"
 
 log "Deployment complete (native API service behind host Nginx)"

@@ -128,7 +128,7 @@ The repo is prepared so the app can build from a clean clone on a server.
 1. Clone the repository on the server:
 
 ```bash
-git clone https://github.com/allberdovallberd/kinochy.git
+git clone https://github.com/mali-ab/kinochy.git
 cd kinochy
 ```
 
@@ -174,7 +174,7 @@ Compose runs PostgreSQL, `app` (ASP.NET Core API), and `edge` (nginx, public on 
 
 ### Deploy the API and admin without Docker
 
-Copy `.deploy.env.example` to `.deploy.env` and set the SSH host, user, authentication, and `DEPLOY_SERVER_NAME`. Run `./deploy.sh` from a machine with the .NET 10 SDK, Node.js/npm, SSH, and rsync. The script builds the admin SPA and publishes the API locally, syncs only those release artifacts, switches a `current` symlink, installs/restarts a systemd API service, and reloads the host Nginx site. It does not build or run the API in Docker. PostgreSQL remains in the existing Compose service and is exposed only on `127.0.0.1:5432`; configure the server `.env` with the PostgreSQL credentials and `MOVIE_STORAGE_PATH`. The deploy account needs passwordless sudo for Nginx and systemd setup, plus the .NET 10 runtime and Nginx installed on the server.
+Copy `.deploy.env.example` to `.deploy.env` and set the SSH host, user, authentication, `DEPLOY_SERVER_NAME`, and a strong `POSTGRES_PASSWORD`. `DEPLOY_REPO` defaults to `https://github.com/mali-ab/kinochy.git`, and `DEPLOY_BRANCH` defaults to `main`. Run `./deploy.sh` from a machine with SSH and rsync. The script clones or fetches that repository into `$DEPLOY_PATH/source`, builds the admin SPA and publishes the API from that server checkout, installs PostgreSQL on Debian/Ubuntu, creates the configured database and role, switches a `current` symlink, installs/restarts a systemd API service, and reloads host Nginx. PostgreSQL and the app both run directly on the server, outside Docker. Set `JWT_SECRET` and `MOVIE_STORAGE_PATH` in the app `.env`; the script builds the API's local `DATABASE_URL` from `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` in `.deploy.env`. The server needs Git, Node.js/npm, the .NET 10 SDK, Nginx, systemd, and passwordless sudo for PostgreSQL, Nginx, and systemd setup.
 
 This repository snapshot does not contain the separate Next.js public frontend source. The deployed site root serves the admin SPA; add the frontend build artifact and its Nginx route when that source is available.
 

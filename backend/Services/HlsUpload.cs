@@ -138,17 +138,17 @@ public static partial class HlsUpload
         var existingVariants = existingPlaylist is not null && Path.GetExtension(existingPlaylist).Equals(".m3u8", StringComparison.OrdinalIgnoreCase) && File.Exists(existingPlaylist)
             ? ReadMasterVariants(existingPlaylist)
             : [];
-        var canExtend = existingVariants.Count > 0;
-        var bundleDirectory = CreateBundleDirectory(uploadRoot);
+        Directory.CreateDirectory(uploadRoot);
+        var masterPath=Path.Combine(uploadRoot,"playlist.m3u8");
         var variants = new List<(string Quality, string Playlist)>();
+        var movedVariants=new List<(string Source,string Destination)>();
+        var createdQualityDirectories=new List<string>();
+        var backups=new List<(string Original,string Backup)>();
+        var temporaryMaster=Path.Combine(uploadRoot,$".playlist-{Guid.NewGuid():N}.tmp");
         try
         {
-            if(canExtend)
-            {
-                var replaced=renditions.Select(item=>item.Quality).ToHashSet(StringComparer.OrdinalIgnoreCase);
-                variants.AddRange(existingVariants.Where(item=>!replaced.Contains(item.Quality)));
-                LinkVariants(existingPlaylist!,bundleDirectory,variants);
-            }
+            var replaced=renditions.Select(item=>item.Quality).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            variants.AddRange(MoveVariantsToRoot(existingPlaylist,uploadRoot,existingVariants,replaced,movedVariants));
             foreach (var (quality, zip) in renditions)
             {
                 if (!QualityProfiles.ContainsKey(quality)) throw new ApiException($"Unsupported movie quality: {quality}");
@@ -158,19 +158,38 @@ public static partial class HlsUpload
                 var savedPlaylist = await SaveZipAsync(zip, uploadRoot);
                 var temporaryDirectory = FindBundleDirectory(savedPlaylist, uploadRoot);
                 var relativePlaylist = Path.GetRelativePath(temporaryDirectory, savedPlaylist);
-                var qualityDirectory = Path.Combine(bundleDirectory, quality.ToLowerInvariant());
+                var qualityDirectory = Path.Combine(uploadRoot, quality.ToLowerInvariant());
+                if(Directory.Exists(qualityDirectory))
+                {
+                    var backup=Path.Combine(uploadRoot,$".{quality.ToLowerInvariant()}-{Guid.NewGuid():N}.backup");
+                    Directory.Move(qualityDirectory,backup);backups.Add((qualityDirectory,backup));
+                }
+                else if(File.Exists(qualityDirectory))throw new ApiException($"The {quality} folder path is occupied by a file.");
                 Directory.Move(temporaryDirectory, qualityDirectory);
+                createdQualityDirectories.Add(qualityDirectory);
                 variants.RemoveAll(item => item.Quality.Equals(quality, StringComparison.OrdinalIgnoreCase));
                 variants.Add((quality.ToLowerInvariant(), $"{quality.ToLowerInvariant()}/{relativePlaylist.Replace('\\', '/')}"));
             }
 
-            var masterPath = Path.Combine(bundleDirectory, "playlist.m3u8");
-            await File.WriteAllTextAsync(masterPath, BuildMasterPlaylist(variants));
+            await File.WriteAllTextAsync(temporaryMaster,BuildMasterPlaylist(variants));
+            File.Move(temporaryMaster,masterPath,overwrite:true);
+            foreach(var backup in backups)
+            {
+                try{Directory.Delete(backup.Backup,recursive:true);}
+                catch(IOException){}
+                catch(UnauthorizedAccessException){}
+            }
             return masterPath;
         }
         catch
         {
-            if (Directory.Exists(bundleDirectory)) Directory.Delete(bundleDirectory, recursive: true);
+            if(File.Exists(temporaryMaster))File.Delete(temporaryMaster);
+            foreach(var directory in createdQualityDirectories.AsEnumerable().Reverse())
+                if(Directory.Exists(directory))Directory.Delete(directory,recursive:true);
+            foreach(var backup in backups.AsEnumerable().Reverse())
+                if(Directory.Exists(backup.Backup)&&!Directory.Exists(backup.Original))Directory.Move(backup.Backup,backup.Original);
+            foreach(var moved in movedVariants.AsEnumerable().Reverse())
+                if(Directory.Exists(moved.Destination)&&!Directory.Exists(moved.Source))Directory.Move(moved.Destination,moved.Source);
             throw;
         }
     }
@@ -186,29 +205,56 @@ public static partial class HlsUpload
         var remaining=variants.Where(item=>!removals.Contains(item.Quality)).ToList();
         if(remaining.Count==0)throw new ApiException("A movie must keep at least one HLS quality.");
 
-        var directory=CreateBundleDirectory(uploadRoot);
+        Directory.CreateDirectory(uploadRoot);
+        var rootPlaylist=Path.Combine(uploadRoot,"playlist.m3u8");
+        var movedVariants=new List<(string Source,string Destination)>();
+        var temporaryMaster=Path.Combine(uploadRoot,$".playlist-{Guid.NewGuid():N}.tmp");
         try
         {
-            LinkVariants(masterPath,directory,remaining);
-            var playlist=Path.Combine(directory,"playlist.m3u8");
-            await File.WriteAllTextAsync(playlist,BuildMasterPlaylist(remaining));
-            return playlist;
+            var rootVariants=MoveVariantsToRoot(masterPath,uploadRoot,remaining,new HashSet<string>(StringComparer.OrdinalIgnoreCase),movedVariants);
+            await File.WriteAllTextAsync(temporaryMaster,BuildMasterPlaylist(rootVariants));
+            File.Move(temporaryMaster,rootPlaylist,overwrite:true);
+            return rootPlaylist;
         }
-        catch { Directory.Delete(directory,recursive:true);throw; }
+        catch
+        {
+            if(File.Exists(temporaryMaster))File.Delete(temporaryMaster);
+            foreach(var moved in movedVariants.AsEnumerable().Reverse())
+                if(Directory.Exists(moved.Destination)&&!Directory.Exists(moved.Source))Directory.Move(moved.Destination,moved.Source);
+            throw;
+        }
     }
 
-    private static void LinkVariants(string existingPlaylist,string destination,IEnumerable<(string Quality,string Playlist)> variants)
+    private static List<(string Quality,string Playlist)> MoveVariantsToRoot(string? existingPlaylist,string root,
+        IEnumerable<(string Quality,string Playlist)> variants,IReadOnlySet<string> excluded,List<(string Source,string Destination)> moved)
     {
-        var source=Path.GetDirectoryName(Path.GetFullPath(existingPlaylist))!;
+        var result=new List<(string Quality,string Playlist)>();
+        var source=existingPlaylist is null?null:Path.GetDirectoryName(Path.GetFullPath(existingPlaylist));
         foreach(var variant in variants)
         {
+            if(excluded.Contains(variant.Quality))continue;
             var parts=variant.Playlist.Split('/');
             if(parts.Length<2||parts[0]!=variant.Quality||parts.Any(part=>part is "" or "." or "..")||variant.Playlist.Contains('\\'))
                 throw new ApiException("The existing quality playlist cannot be safely extended.");
-            var directory=new DirectoryInfo(Path.Combine(source,variant.Quality));
-            var target=directory.ResolveLinkTarget(true)?.FullName??directory.FullName;
-            Directory.CreateSymbolicLink(Path.Combine(destination,variant.Quality),target);
+            var quality=variant.Quality.ToLowerInvariant();
+            var destination=Path.Combine(root,quality);
+            if(source is not null)
+            {
+                var sourceDirectory=Path.Combine(source,quality);
+                if(!Path.GetFullPath(sourceDirectory).Equals(Path.GetFullPath(destination),StringComparison.Ordinal)&&Directory.Exists(sourceDirectory))
+                {
+                    if(!Directory.Exists(destination))
+                    {
+                        Directory.Move(sourceDirectory,destination);
+                        moved.Add((sourceDirectory,destination));
+                    }
+                }
+            }
+            if(!Directory.Exists(destination))throw new ApiException($"The existing {variant.Quality} quality folder could not be found.");
+            var remainder=string.Join('/',parts.Skip(1));
+            result.Add((quality,$"{quality}/{remainder}"));
         }
+        return result;
     }
 
     private static List<(string Quality, string Playlist)> ReadMasterVariants(string masterPath)

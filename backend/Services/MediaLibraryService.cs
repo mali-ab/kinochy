@@ -53,7 +53,8 @@ public sealed partial class MediaLibraryService(IConfiguration configuration)
             var imported = new List<ImportedEpisode>();
             foreach (var episode in item.Episodes.OrderBy(value => value.SeasonNumber).ThenBy(value => value.EpisodeNumber))
             {
-                var media = await ImportPlayableDirectoryAsync(episode.Path, episode.Qualities, uploadRoot);
+                var episodeRoot=Path.Combine(uploadRoot,$"season-{episode.SeasonNumber:00}",$"episode-{episode.EpisodeNumber:000}");
+                var media = await ImportPlayableDirectoryAsync(episode.Path, episode.Qualities, episodeRoot);
                 imported.Add(new(episode.SeasonNumber, episode.EpisodeNumber, episode.Title, media.Playlist, media.Subtitles));
             }
             var first = imported[0];
@@ -63,9 +64,8 @@ public sealed partial class MediaLibraryService(IConfiguration configuration)
         return new(single.Playlist, single.Subtitles, []);
     }
 
-    private async Task<(string Playlist, Dictionary<string,string> Subtitles)> ImportPlayableDirectoryAsync(string source, string[] qualities, string uploadRoot)
+    private async Task<(string Playlist, Dictionary<string,string> Subtitles)> ImportPlayableDirectoryAsync(string source, string[] qualities, string directory)
     {
-        var directory = Path.Combine(uploadRoot, $"{Guid.NewGuid():N}-library");
         Directory.CreateDirectory(directory);
         try
         {

@@ -129,6 +129,13 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         if(relationRequested&&(!hasSeriesRelation||id is not null||relationSeason is < 1 or > 100||relationEpisode is < 1 or > 1000))
             throw new ApiException("An episode must be a new movie with a valid series, season, and episode number.");
         if(hasSeriesRelation&&isSeries)throw new ApiException("An episode must contain one video, not another series.");
+        var seriesFolderSlug=existingMovie?.Episode?.SeriesSlug;
+        if(hasSeriesRelation)
+        {
+            var parentSeries=await FindAsync(seriesId.ToString(),true);
+            if(parentSeries is null||!parentSeries.IsSeries)throw new ApiException("The selected series was not found.",404);
+            seriesFolderSlug=parentSeries.Slug;
+        }
         foreach(var file in form.Files)if(file.Length>UploadMaxBytes)throw new ApiException($"{file.FileName} exceeds the 8 GiB upload limit",413);
         var rejectedVideo=form.Files.GetFile("video");
         var subtitleZip=form.Files.GetFile("subtitleZip");
@@ -145,12 +152,18 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         if(id is null&&!isSeries&&qualityZips.Count==0&&serverMediaPath.Length==0)throw new ApiException("Add at least one HLS quality ZIP or select a quality-based server movie folder.");
         var year=ParseYear(form["year"].ToString());
         var slug=BuildSlug(titleEn,year);
-        var uploadRoot=Path.Combine(storageRoot,slug);
+        var isEpisode=hasSeriesRelation||existingMovie?.IsEpisode==true;
+        var episodeSeason=hasSeriesRelation?relationSeason:existingMovie?.Episode?.SeasonNumber??1;
+        var episodeNumber=hasSeriesRelation?relationEpisode:existingMovie?.Episode?.EpisodeNumber??1;
+        var uploadRoot=isEpisode&&seriesFolderSlug is not null
+            ?Path.Combine(storageRoot,seriesFolderSlug,$"season-{episodeSeason:00}",$"episode-{episodeNumber:000}-{slug}")
+            :Path.Combine(storageRoot,slug);
         var oldVideoRoot=existingMovie is null?null:existingMovie.IsEpisode?StorageEpisodeRootForPath(existingMovie.VideoPath,storageRoot):StorageRootForPath(existingMovie.VideoPath,storageRoot);
         var oldCoverRoot=existingMovie is null?null:StorageRootForUrl(existingMovie.CoverUrl,storageRoot);
         var sourceRoot=oldVideoRoot??oldCoverRoot;
         var movedStorageRoot=false;
-        if(sourceRoot is not null&&!Path.GetFullPath(sourceRoot).Equals(Path.GetFullPath(uploadRoot),StringComparison.Ordinal))
+        var sourceIsManagedStorage=sourceRoot is not null&&Path.GetFullPath(sourceRoot).StartsWith(Path.GetFullPath(storageRoot)+Path.DirectorySeparatorChar,StringComparison.Ordinal);
+        if(sourceIsManagedStorage&&sourceRoot is not null&&!Path.GetFullPath(sourceRoot).Equals(Path.GetFullPath(uploadRoot),StringComparison.Ordinal))
         {
             if(Directory.Exists(uploadRoot))throw new ApiException($"Storage folder '{slug}' already exists. Resolve the existing folder before changing this movie.",409);
             if(Directory.Exists(sourceRoot)){Directory.Move(sourceRoot,uploadRoot);movedStorageRoot=true;RebaseStorageLinks(uploadRoot,sourceRoot,uploadRoot);}
@@ -161,7 +174,7 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         try
         {
         var previousVideoPath=existingMovie is null?null:MoveStoragePath(existingMovie.VideoPath,oldVideoRoot,uploadRoot);
-        var previousCoverUrl=MoveStorageUrl(existingMovie?.CoverUrl,oldCoverRoot,uploadRoot);
+        var previousCoverUrl=existingMovie?.CoverUrl;
         var coverFile=existingMovie is null?null:StoragePathForUrl(existingMovie.CoverUrl,storageRoot);
         var physicalCoverFile=coverFile is not null&&movedStorageRoot&&sourceRoot is not null&&oldCoverRoot is not null&&Path.GetFullPath(sourceRoot).Equals(Path.GetFullPath(oldCoverRoot),StringComparison.Ordinal)
             ?MoveStoragePath(coverFile,oldCoverRoot,uploadRoot):coverFile;
@@ -288,7 +301,7 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
             await using var relationCommand=connection.Command(relationSql,("series",seriesId),("movie",movieId),("season",relationSeason),("episode",relationEpisode),("title",title));
             if(await relationCommand.ExecuteScalarAsync() is null)throw new ApiException("Could not add the episode. Check that the series, season, and episode number are valid.",409);
         }
-        async Task SaveSubtitles(Guid targetId,Dictionary<string,string> sources){foreach(var item in sources){var cues=SubtitleParser.Parse(item.Value);if(cues.Count==0)throw new ApiException($"{item.Key.ToUpperInvariant()} subtitle file has no valid cues.");var subtitlePath=Path.Combine(uploadRoot,$"subtitle.{item.Key}.vtt");await File.WriteAllTextAsync(subtitlePath,SubtitleParser.ToVtt(cues));await using var q=connection.Command("INSERT INTO subtitles(movie_id,language,cues) VALUES(@id,@language,@cues::jsonb) ON CONFLICT(movie_id,language) DO UPDATE SET cues=excluded.cues",("id",targetId),("language",item.Key),("cues",JsonSerializer.Serialize(cues,SubtitleJson)));await q.ExecuteNonQueryAsync();}}
+        async Task SaveSubtitles(Guid targetId,Dictionary<string,string> sources,string? subtitleRoot=null){var destination=subtitleRoot??uploadRoot;foreach(var item in sources){var cues=SubtitleParser.Parse(item.Value);if(cues.Count==0)throw new ApiException($"{item.Key.ToUpperInvariant()} subtitle file has no valid cues.");var subtitlePath=Path.Combine(destination,$"subtitle.{item.Key}.vtt");await File.WriteAllTextAsync(subtitlePath,SubtitleParser.ToVtt(cues));await using var q=connection.Command("INSERT INTO subtitles(movie_id,language,cues) VALUES(@id,@language,@cues::jsonb) ON CONFLICT(movie_id,language) DO UPDATE SET cues=excluded.cues",("id",targetId),("language",item.Key),("cues",JsonSerializer.Serialize(cues,SubtitleJson)));await q.ExecuteNonQueryAsync();}}
         await SaveSubtitles(movieId,subtitleSources);
         if(removeSubtitleLanguages.Length>0){await using var removeSubtitles=connection.Command("DELETE FROM subtitles WHERE movie_id=@id AND language=ANY(@languages)",("id",movieId),("languages",removeSubtitleLanguages));await removeSubtitles.ExecuteNonQueryAsync();}
         if(libraryImport?.Episodes.Count>0)
@@ -302,7 +315,7 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
                 const string episodeSql="""INSERT INTO movies(slug,title,original_title,description,year,country,genre,genres,type,duration,rating,difficulty,accent,age_rating,cover_url,video_path,title_tm,title_en,title_ru,description_tm,description_en,description_ru) VALUES(@slug,@title,@title,@description,@year,@country,@genre,@genres::jsonb,'Episode',@duration,@rating,@difficulty,@accent,@age,@cover,@video,@titleTm,@titleEn,@titleRu,@descriptionTm,@descriptionEn,@descriptionRu) RETURNING id""";
                 await using var episodeCommand=connection.Command(episodeSql,("slug",episodeSlug),("title",episodeTitle),("description",descriptionEn),("year",year),("country",country),("genre",JsonSerializer.Deserialize<string[]>(genres)?.FirstOrDefault()),("genres",genres),("duration",form["duration"].ToString()),("rating",ratingValue),("difficulty",difficulty),("accent",form["accent"].ToString()),("age",form["ageRating"].ToString()),("cover",coverUrl),("video",episode.Playlist),("titleTm",episodeTitleTm),("titleEn",episodeTitle),("titleRu",episodeTitleRu),("descriptionTm",descriptionTm),("descriptionEn",descriptionEn),("descriptionRu",descriptionRu));
                 var episodeId=(Guid)(await episodeCommand.ExecuteScalarAsync())!;
-                await SaveSubtitles(episodeId,episode.Subtitles);
+                await SaveSubtitles(episodeId,episode.Subtitles,Path.GetDirectoryName(episode.Playlist));
                 await using var seasonCommand=connection.Command("INSERT INTO series_seasons(series_id,season_number) VALUES(@series,@season) ON CONFLICT DO NOTHING",("series",movieId),("season",episode.SeasonNumber));
                 await seasonCommand.ExecuteNonQueryAsync();
                 await using var link=connection.Command("INSERT INTO series_episodes(series_id,movie_id,season_number,episode_number,title) VALUES(@series,@movie,@season,@episode,@title)",("series",movieId),("movie",episodeId),("season",episode.SeasonNumber),("episode",episode.EpisodeNumber),("title",episode.Title));
@@ -388,15 +401,6 @@ public sealed class MovieService(Database database, IWebHostEnvironment environm
         if(string.IsNullOrWhiteSpace(url)||!url.StartsWith("/media/uploads/",StringComparison.Ordinal))return null;
         var remainder=url["/media/uploads/".Length..];var first=remainder.Split('/',StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
         return first is null?null:"/media/uploads/"+first;
-    }
-
-    private static string? MoveStorageUrl(string? url,string? oldRoot,string newRoot)
-    {
-        if(string.IsNullOrWhiteSpace(url)||oldRoot is null||!url.StartsWith("/media/uploads/",StringComparison.Ordinal))return url;
-        var relative=url["/media/uploads/".Length..];var oldName=Path.GetFileName(oldRoot);
-        if(!relative.Equals(oldName,StringComparison.Ordinal)&&!relative.StartsWith(oldName+"/",StringComparison.Ordinal))return url;
-        var remainder=relative.Length==oldName.Length?"":relative[(oldName.Length+1)..];
-        return "/media/uploads/"+Path.GetFileName(newRoot)+(remainder.Length==0?"":"/"+remainder);
     }
 
     private static string? MoveStoragePath(string? path,string? oldRoot,string newRoot)
