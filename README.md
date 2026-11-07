@@ -174,9 +174,9 @@ Compose runs PostgreSQL, `app` (ASP.NET Core API), and `edge` (nginx, public on 
 
 ### Deploy the API and admin without Docker
 
-Copy `.deploy.env.example` to `.deploy.env` and set the SSH host, user, authentication, `DEPLOY_SERVER_NAME`, and a strong `POSTGRES_PASSWORD`. Set `DEPLOY_SUDO_PASSWORD` in the ignored `.deploy.env` if the SSH user needs a sudo password; alternatively, configure passwordless sudo for that user. Point the domain at the server and allow inbound ports 80 and 443. Nginx redirects HTTP to HTTPS using the existing ZeroSSL certificate at `/etc/nginx/ssl/zehinli.biz/`; the certificate must cover `DEPLOY_SERVER_NAME`. `DEPLOY_API_PORT` is private and used only between Nginx and the API. Run `./deploy.sh` from your local checkout on a machine with Node.js/npm, the .NET 10 SDK, SSH, and rsync. The script builds the admin SPA and publishes the API locally, then syncs those release artifacts to the server. It installs PostgreSQL on Debian/Ubuntu, creates the configured database and role, switches a `current` symlink, installs/restarts a systemd API service, and configures host Nginx. PostgreSQL and the app both run directly on the server, outside Docker. Set `JWT_SECRET` in the app `.env`; the script anchors `MOVIE_STORAGE_PATH=backend/storage/uploads` at `$DEPLOY_PATH`, copies existing files into that folder, and updates stored movie paths during migration. It builds the API's local `DATABASE_URL` from `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` in `.deploy.env`.
+Copy `.deploy.env.example` to `.deploy.env` and set the SSH host, user, authentication, `DEPLOY_SERVER_NAME`, and PostgreSQL connection credentials. PostgreSQL and its database must already be installed and configured on the server; `deploy.sh` only checks the connection. Set `DEPLOY_SUDO_PASSWORD` in the ignored `.deploy.env` if the SSH user needs a sudo password; alternatively, configure passwordless sudo for that user. Point the domain at the server and allow inbound ports 80 and 443. The deployed Nginx site redirects HTTP to HTTPS and reuses the certificate and key already installed on the server; `deploy.sh` does not request or install certificates. Set `DEPLOY_TLS_CERTIFICATE` and `DEPLOY_TLS_CERTIFICATE_KEY` if the existing files use different paths. `DEPLOY_API_PORT` is private and used only between Nginx and the API. Run `./deploy.sh` from your local checkout on a machine with Node.js/npm, the .NET 10 SDK, SSH, and rsync. The script builds the admin SPA for `/admin/` and publishes the API locally, then syncs those release artifacts to the server. The admin UI is available at `https://<domain>/admin/`; the API is available at `https://<domain>/api/` (health check: `/api/health`). Nginx serves the admin SPA, proxies API and media requests directly to the native API service, and proxies `/` to a frontend already listening on `127.0.0.1:5173`. That frontend is not part of this deployment and must be started separately. Deployment checks `/`, `/admin/`, and `/api/health` through Nginx. On the server, the script switches the `current` release symlink, configures the API systemd service, and sets up host Nginx. PostgreSQL and the API run directly on the server, outside Docker. Set `JWT_SECRET` in the app `.env`; `deploy.sh` configures the API to use `MOVIE_STORAGE_PATH` and makes that directory available to Nginx, but does not copy or migrate movie files or change movie paths in the database. It builds the API's local `DATABASE_URL` from `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD` in `.deploy.env`.
 
-This repository snapshot does not contain the separate Next.js public frontend source. The deployed site root serves the admin SPA; add the frontend build artifact and its Nginx route when that source is available.
+The `deploy.sh` Nginx site proxies `/` to `http://127.0.0.1:5173`, serves the admin SPA, and proxies API/media requests to the native API service. The frontend process must already be running on that local port.
 
 ## Persistent Data
 
@@ -186,23 +186,6 @@ Docker volumes keep production data between restarts:
 - `app_storage`: generated preview and other runtime storage
 
 Uploaded movie assets are stored at `MOVIE_STORAGE_PATH` (default `backend/storage/uploads`). Compose bind-mounts that host folder at `/movie_storage` inside the app container. Each movie's master playlist path is saved in the database `movies.video_path` column.
-
-After setting `MOVIE_STORAGE_PATH`, migrate assets from the former Docker volume before uploading new movies:
-
-```bash
-./scripts/migrate_movie_storage.sh
-docker compose up -d --force-recreate app
-```
-
-To copy the Docker app's uploaded movie files into `backend/storage/uploads` without changing database paths or deleting the Docker originals, run:
-
-```bash
-./scripts/copy_docker_movies_to_storage.sh
-```
-
-The copy can be resumed safely. Existing destination files are kept and verified against the Docker source; conflicts stop the script.
-
-The migration can resume into a non-empty destination without overwriting files. It verifies that existing files match, updates existing `movies.video_path` values, and then removes only the old volume's uploaded movie files. Runtime previews and other volume data remain intact.
 
 Large local HLS bundles can be kept outside the Docker volume in `backend/storage/preloaded/<movie>/`. Add a `movie.json` containing `title` and `playlist`; Compose mounts this directory read-only and startup connects the playlist to the movie with that exact title.
 

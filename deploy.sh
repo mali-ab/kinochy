@@ -28,6 +28,10 @@ if [[ -z "$DEPLOY_SERVER_NAME" && "$DEPLOY_HEALTH_URL" =~ ^https?://([^/:]+) ]];
 fi
 DEPLOY_SERVER_NAME="${DEPLOY_SERVER_NAME:-$DEPLOY_HOST}"
 DEPLOY_API_PORT="${DEPLOY_API_PORT:-4000}"
+DEPLOY_TLS_CERTIFICATE="${DEPLOY_TLS_CERTIFICATE:-/etc/nginx/ssl/zehinli.biz/fullchain.crt}"
+DEPLOY_TLS_CERTIFICATE_KEY="${DEPLOY_TLS_CERTIFICATE_KEY:-/etc/nginx/ssl/zehinli.biz/private.key}"
+[[ "$DEPLOY_TLS_CERTIFICATE" =~ ^/[A-Za-z0-9_./-]+$ ]] || die "DEPLOY_TLS_CERTIFICATE must be an absolute path containing only letters, digits, dots, underscores, slashes, and hyphens"
+[[ "$DEPLOY_TLS_CERTIFICATE_KEY" =~ ^/[A-Za-z0-9_./-]+$ ]] || die "DEPLOY_TLS_CERTIFICATE_KEY must be an absolute path containing only letters, digits, dots, underscores, slashes, and hyphens"
 DEPLOY_APP_ENV="${DEPLOY_APP_ENV:-}"
 POSTGRES_DB="${POSTGRES_DB:-kinochy}"
 POSTGRES_USER="${POSTGRES_USER:-kinochy}"
@@ -66,8 +70,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-log "Building admin assets and publishing API from the local checkout"
-npm run build --prefix "$ROOT_DIR/admin"
+log "Building admin assets for /admin/ and publishing API from the local checkout"
+APP_BASE_PATH=/admin/ npm run build --prefix "$ROOT_DIR/admin"
 dotnet publish "$ROOT_DIR/backend/Kinochy.Api.csproj" -c Release --no-restore -o "$BUILD_DIR/api"
 mkdir -p "$BUILD_DIR/admin"
 cp -a "$ROOT_DIR/admin/dist/." "$BUILD_DIR/admin/"
@@ -94,7 +98,7 @@ REMOTE_SECRETS_Q="$(shell_quote "$REMOTE_SECRETS")"
 (umask 077; printf '%s\0' "$POSTGRES_DB" "$POSTGRES_USER" "$POSTGRES_PASSWORD" "$DEPLOY_SUDO_PASSWORD" > "$SECRETS_FILE")
 rsync -az --chmod=F600 -e "$RSYNC_SSH_CMD" "$SECRETS_FILE" "$REMOTE:$REMOTE_SECRETS"
 
-log "Installing native API service and host Nginx site"
+log "Deploying API service and configuring host Nginx"
 REMOTE_SCRIPT=$(cat <<'REMOTE_EOF'
 set -eu
 release="$1"
@@ -103,11 +107,16 @@ service_user="$3"
 site_name="$4"
 server_name="$5"
 api_port="$6"
-secrets_file="$7"
+tls_certificate="$7"
+tls_certificate_key="$8"
+secrets_file="$9"
 askpass_file=""
 cleanup_deploy_secrets() {
+    status=$?
+    trap - EXIT
     rm -f -- "$secrets_file"
     if [ -n "$askpass_file" ]; then rm -f -- "$askpass_file"; fi
+    exit "$status"
 }
 trap cleanup_deploy_secrets EXIT
 mapfile -d '' -t deploy_secrets < "$secrets_file"
@@ -118,7 +127,9 @@ postgres_password="${deploy_secrets[2]}"
 deploy_sudo_password="${deploy_secrets[3]}"
 
 test -f "$deploy_path/.env" || { echo "Missing $deploy_path/.env; it must define JWT_SECRET and MOVIE_STORAGE_PATH" >&2; exit 1; }
-for command in dotnet nginx systemctl apt-get; do command -v "$command" >/dev/null 2>&1 || { echo "Missing server command: $command" >&2; exit 1; }; done
+for command in dotnet nginx systemctl psql setfacl curl; do command -v "$command" >/dev/null 2>&1 || { echo "Missing server command: $command" >&2; exit 1; }; done
+sudo test -r "$tls_certificate" || { echo "TLS certificate is missing or unreadable: $tls_certificate" >&2; exit 1; }
+sudo test -r "$tls_certificate_key" || { echo "TLS private key is missing or unreadable: $tls_certificate_key" >&2; exit 1; }
 if [ -n "$deploy_sudo_password" ]; then
     askpass_file="$(mktemp /tmp/kinochy-askpass.XXXXXX)"
     cat > "$askpass_file" <<ASKPASS
@@ -147,18 +158,16 @@ case "$movie_storage_path" in
     /*) ;;
     *) movie_storage_path="$deploy_path/$movie_storage_path" ;;
 esac
+movie_storage_path="$(realpath -m -- "$movie_storage_path")"
+test "$movie_storage_path" != "/" || { echo "MOVIE_STORAGE_PATH cannot be the filesystem root" >&2; exit 1; }
+case "$movie_storage_path" in
+    *$'\n'*|*'$'*|*\"*|*\;*|*\\*) { echo "MOVIE_STORAGE_PATH contains characters that cannot be used safely in the Nginx alias" >&2; exit 1; } ;;
+esac
 test -n "$postgres_db" && test -n "$postgres_user" && test -n "$postgres_password" || { echo "Set POSTGRES_DB, POSTGRES_USER, and POSTGRES_PASSWORD in .deploy.env" >&2; exit 1; }
-sudo apt-get update
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y postgresql postgresql-client acl
-sudo systemctl enable --now postgresql
-sudo -u postgres psql -v ON_ERROR_STOP=1 --set=db="$postgres_db" --set=role="$postgres_user" --set=password="$postgres_password" <<'SQL'
-SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', :'role', :'password')
-WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'role')\gexec
-SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', :'role', :'password')\gexec
-SELECT format('CREATE DATABASE %I OWNER %I', :'db', :'role')
-WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = :'db')\gexec
-SELECT format('ALTER DATABASE %I OWNER TO %I', :'db', :'role')\gexec
-SQL
+PGPASSWORD="$postgres_password" psql -h 127.0.0.1 -p 5432 -U "$postgres_user" -d "$postgres_db" -v ON_ERROR_STOP=1 -c 'SELECT 1' >/dev/null || {
+    echo "PostgreSQL must already be running with database '$postgres_db' and role '$postgres_user'." >&2
+    exit 1
+}
 quote_conn_value() { printf '"%s"' "$(printf '%s' "$1" | sed 's/"/""/g')"; }
 database_url="Host=127.0.0.1;Port=5432;Database=$(quote_conn_value "$postgres_db");Username=$(quote_conn_value "$postgres_user");Password=$(quote_conn_value "$postgres_password")"
 escape_env_value() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
@@ -167,25 +176,21 @@ sudo chmod 0600 /etc/kinochy-api.env
 
 sudo install -d -o "$service_user" -g "$service_user" "$deploy_path/shared"
 sudo install -d -o "$service_user" -g "$service_user" -m 2775 "$movie_storage_path"
-previous_movie_storage_path="$(readlink -f /var/lib/kinochy/movies 2>/dev/null || true)"
-if [ -n "$previous_movie_storage_path" ] && [ -d "$previous_movie_storage_path" ] && [ "$previous_movie_storage_path" != "$movie_storage_path" ]; then
-    echo "Migrating existing movie files from $previous_movie_storage_path to $movie_storage_path"
-    sudo cp -a "$previous_movie_storage_path/." "$movie_storage_path/"
-    if [ "$(sudo -u postgres psql -d "$postgres_db" -Atqc "SELECT to_regclass('public.movies') IS NULL" 2>/dev/null || echo t)" = "f" ]; then
-        sudo -u postgres psql -d "$postgres_db" -v ON_ERROR_STOP=1 --set=oldroot="$previous_movie_storage_path" --set=newroot="$movie_storage_path" <<'SQL'
-UPDATE movies
-SET video_path = :'newroot' || substring(video_path FROM length(:'oldroot') + 1)
-WHERE left(video_path, length(:'oldroot') + 1) = :'oldroot' || '/';
-SQL
-    fi
-fi
 acl_path="$deploy_path"
 while [ "$acl_path" != "/" ]; do
     sudo setfacl -m u:www-data:--x "$acl_path"
     acl_path="$(dirname "$acl_path")"
 done
-sudo install -d /var/lib/kinochy
-sudo ln -sfn "$movie_storage_path" /var/lib/kinochy/movies
+# Nginx reads media only after the API authorizes the request and returns an
+# X-Accel-Redirect. Grant it traversal on the storage parents and read access
+# to existing media; default ACLs cover future uploads and directories.
+acl_path="$(dirname "$movie_storage_path")"
+while [ "$acl_path" != "/" ]; do
+    sudo setfacl -m u:www-data:--x "$acl_path"
+    acl_path="$(dirname "$acl_path")"
+done
+sudo setfacl -R -m u:www-data:r-X "$movie_storage_path"
+sudo find "$movie_storage_path" -type d -exec setfacl -m d:u:www-data:r-X {} +
 sudo ln -sfn "$release" "$deploy_path/current.new"
 sudo mv -Tf "$deploy_path/current.new" "$deploy_path/current"
 
@@ -220,12 +225,10 @@ server {
     listen 80;
     listen [::]:80;
     server_name $server_name;
-    location ^~ /.well-known/acme-challenge/ {
-        root /var/www/letsencrypt;
-        default_type text/plain;
-        try_files \$uri =404;
+
+    location / {
+        return 301 https://\$host\$request_uri;
     }
-    location / { return 301 https://\$host\$request_uri; }
 }
 
 server {
@@ -233,15 +236,19 @@ server {
     listen [::]:443 ssl;
     server_name $server_name;
 
-    ssl_certificate /etc/nginx/ssl/zehinli.biz/fullchain.crt;
-    ssl_certificate_key /etc/nginx/ssl/zehinli.biz/private.key;
+    ssl_certificate $tls_certificate;
+    ssl_certificate_key $tls_certificate_key;
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_ciphers HIGH:!aNULL:!MD5;
 
-    root $deploy_path/current/admin;
+    root $deploy_path/current;
     index index.html;
     client_max_body_size 0;
     sendfile on;
+
+    location = /admin { return 301 /admin/; }
+    location = /api { return 308 /api/; }
+
     location /api/ {
         proxy_pass http://127.0.0.1:$api_port;
         proxy_http_version 1.1;
@@ -265,21 +272,35 @@ server {
     }
     location ^~ /_protected_media/ {
         internal;
-        alias /var/lib/kinochy/movies/;
+        alias "$movie_storage_path/";
         sendfile on;
         tcp_nopush on;
         open_file_cache max=10000 inactive=60s;
         open_file_cache_valid 120s;
         open_file_cache_min_uses 2;
     }
-    location /assets/ {
+    location /admin/assets/ {
         try_files \$uri =404;
         add_header Cache-Control "public, max-age=31536000, immutable" always;
     }
-    location / {
-        try_files \$uri \$uri/ /index.html;
+
+    location /admin/ {
+        try_files \$uri \$uri/ /admin/index.html;
         add_header Cache-Control "no-store, no-cache, must-revalidate" always;
     }
+
+    location / {
+        proxy_pass http://127.0.0.1:5173;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 60s;
+    }
+
 }
 NGINX
 sudo install -m 0644 "/tmp/$site_name.nginx.conf" "/etc/nginx/sites-available/$site_name"
@@ -295,11 +316,16 @@ for attempt in $(seq 1 30); do
     sleep 1
 done
 test "$healthy" -eq 1 || { sudo systemctl --no-pager --full status kinochy-api.service; exit 1; }
+curl -fsS --resolve "$server_name:443:127.0.0.1" "https://$server_name/admin/" >/dev/null
 curl -fsS --resolve "$server_name:443:127.0.0.1" "https://$server_name/api/health" >/dev/null
-echo "API health check passed"
+curl -fsS --max-time 5 --resolve "$server_name:443:127.0.0.1" "https://$server_name/" >/dev/null || {
+    echo "Frontend proxy failed. Ensure the frontend is listening on 127.0.0.1:5173." >&2
+    exit 1
+}
+echo "Frontend, admin, and API Nginx health checks passed"
 REMOTE_EOF
 )
 
-"${SSH[@]}" "$REMOTE" "bash -s -- $REMOTE_RELEASE_Q $(shell_quote "$DEPLOY_PATH") $(shell_quote "$DEPLOY_USER") $(shell_quote "$DEPLOY_NGINX_SITE_NAME") $(shell_quote "$DEPLOY_SERVER_NAME") $(shell_quote "$DEPLOY_API_PORT") $REMOTE_SECRETS_Q" <<<"$REMOTE_SCRIPT"
+"${SSH[@]}" "$REMOTE" "bash -s -- $REMOTE_RELEASE_Q $(shell_quote "$DEPLOY_PATH") $(shell_quote "$DEPLOY_USER") $(shell_quote "$DEPLOY_NGINX_SITE_NAME") $(shell_quote "$DEPLOY_SERVER_NAME") $(shell_quote "$DEPLOY_API_PORT") $(shell_quote "$DEPLOY_TLS_CERTIFICATE") $(shell_quote "$DEPLOY_TLS_CERTIFICATE_KEY") $REMOTE_SECRETS_Q" <<<"$REMOTE_SCRIPT"
 
-log "Deployment complete (native API service behind host Nginx)"
+log "Deployment complete (HTTPS admin/API behind host Nginx; existing TLS certificate reused)"
