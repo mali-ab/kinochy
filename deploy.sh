@@ -28,8 +28,8 @@ if [[ -z "$DEPLOY_SERVER_NAME" && "$DEPLOY_HEALTH_URL" =~ ^https?://([^/:]+) ]];
 fi
 DEPLOY_SERVER_NAME="${DEPLOY_SERVER_NAME:-$DEPLOY_HOST}"
 DEPLOY_API_PORT="${DEPLOY_API_PORT:-4000}"
-DEPLOY_TLS_CERTIFICATE="${DEPLOY_TLS_CERTIFICATE:-/etc/nginx/ssl/zehinli.biz/fullchain.crt}"
-DEPLOY_TLS_CERTIFICATE_KEY="${DEPLOY_TLS_CERTIFICATE_KEY:-/etc/nginx/ssl/zehinli.biz/private.key}"
+DEPLOY_TLS_CERTIFICATE="${DEPLOY_TLS_CERTIFICATE:-/etc/nginx/ssl/fullchain.crt}"
+DEPLOY_TLS_CERTIFICATE_KEY="${DEPLOY_TLS_CERTIFICATE_KEY:-/etc/nginx/ssl/private.key}"
 [[ "$DEPLOY_TLS_CERTIFICATE" =~ ^/[A-Za-z0-9_./-]+$ ]] || die "DEPLOY_TLS_CERTIFICATE must be an absolute path containing only letters, digits, dots, underscores, slashes, and hyphens"
 [[ "$DEPLOY_TLS_CERTIFICATE_KEY" =~ ^/[A-Za-z0-9_./-]+$ ]] || die "DEPLOY_TLS_CERTIFICATE_KEY must be an absolute path containing only letters, digits, dots, underscores, slashes, and hyphens"
 DEPLOY_APP_ENV="${DEPLOY_APP_ENV:-}"
