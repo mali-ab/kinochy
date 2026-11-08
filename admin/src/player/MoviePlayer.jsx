@@ -140,6 +140,9 @@ export default function MoviePlayer({ movie, subtitles, access }) {
             };
         hls = new Hls({
           enableWorker: true,
+          // Feed arriving TS bytes to the transmuxer instead of waiting for
+          // the complete segment response before appending video data.
+          progressive: true,
           lowLatencyMode: false,
           startPosition: -1,
           // Let HLS.js pick a safe first rendition from its bandwidth estimate,

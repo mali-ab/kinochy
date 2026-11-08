@@ -1,4 +1,4 @@
-import { ChevronRight, CircleCheck, Clapperboard, Database, Film, LayoutDashboard, LogOut, MessageSquareText, MonitorPlay, ShieldCheck, Users } from 'lucide-react';
+import { ChevronRight, Clapperboard, Film, LayoutDashboard, LogOut, MessageSquareText, MonitorPlay, ShieldCheck, Users } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslations } from 'use-intl';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -72,7 +72,6 @@ function AdminChrome({ admin, onLogout, children }) {
           <span className="brand-mark"><img src={logoSrc} alt="" width={36} height={36} /></span>
           <span className="admin-brand-copy"><strong>Kinoçy</strong><small>Content operations</small></span>
         </Link>
-        <div className="admin-system-state"><span><CircleCheck size={14} /> System online</span><small>Production workspace</small></div>
         <div className="admin-head-actions">
           <div className="admin-identity"><span>{admin.username?.slice(0, 1).toUpperCase() || 'A'}</span><div><strong>{admin.username || 'Administrator'}</strong><small>{admin.email}</small></div><ShieldCheck size={17} /></div>
           <button className="admin-logout" aria-label={t('admin_logout')} onClick={() => requestConfirm({ title: 'Log out?', body: 'This will close your admin session.', actionLabel: t('admin_logout'), onConfirm: logout })}>
@@ -90,7 +89,6 @@ function AdminChrome({ admin, onLogout, children }) {
     <main className="admin-page">
       <div className="admin-view-context">
         <div><span className="admin-breadcrumb"><Link to="/">Admin</Link><ChevronRight size={13} />{view.label}</span><h1>{view.title}</h1><p>{view.description}</p></div>
-        <div className="admin-context-badges"><span><Database size={15} /> Live catalog</span><span><ShieldCheck size={15} /> Admin access</span></div>
       </div>
       <div className="admin-view-content">{children}</div>
     </main>
@@ -99,7 +97,6 @@ function AdminChrome({ admin, onLogout, children }) {
       <div className="admin-footer-inner">
           <div className="admin-footer-brand"><img src={logoSrc} alt="" width={28} height={28} /><span><strong>Kinoçy Admin</strong><small>Movies, learning and community in one workspace.</small></span></div>
         <nav aria-label="Footer navigation">{navigation.map((item) => <Link key={item.to} to={item.to}>{item.label}</Link>)}</nav>
-        <span className="admin-footer-status"><CircleCheck size={14} /> Operational</span>
       </div>
     </footer>
   </div>;

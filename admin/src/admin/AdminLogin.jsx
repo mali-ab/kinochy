@@ -1,4 +1,4 @@
-import { ArrowLeft, CheckCircle2, Eye, EyeOff, Film, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
+import { ArrowLeft, Eye, EyeOff, Film, LockKeyhole, ShieldCheck, Sparkles } from 'lucide-react';
 import { useTranslations } from 'use-intl';
 import { useState } from 'react';
 import { adminLogin } from '../api/endpoints';
@@ -41,7 +41,6 @@ export default function AdminLogin({ onLogin }) {
             <span><Film size={17} /><span><strong>Catalog control</strong><small>Movies, series and cartoons</small></span></span>
             <span><ShieldCheck size={17} /><span><strong>Protected access</strong><small>Administrator-only workspace</small></span></span>
           </div>
-          <span className="admin-login-status"><CheckCircle2 size={14} /> All systems operational</span>
         </aside>
 
         <div className="admin-login-form-wrap">
