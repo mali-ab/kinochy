@@ -2,6 +2,7 @@ import { Activity, AlertTriangle, BarChart3, Captions, Radio, X } from 'lucide-r
 import { useEffect, useMemo, useRef, useState } from 'react';
 import 'shaka-player/dist/controls.css';
 import { withBasePath } from '../paths';
+import SubtitleMarkup from '../player/SubtitleMarkup.jsx';
 
 const emptyDiagnostics = {
   resolution: 'Waiting…',
@@ -142,7 +143,7 @@ export default function AdminMediaPlayer({ movie, subtitles = {}, title, onClose
     </header>
     <div ref={containerRef} className="admin-shaka-container" data-shaka-player-container>
       <video ref={videoRef} className="admin-shaka-video" data-shaka-player playsInline poster={movie.coverUrl || undefined} />
-      {visibleCues.length ? <div className="admin-multi-subtitle-overlay">{visibleCues.map(({ language, cue }) => <p key={language} data-language={language}><span>{language.toUpperCase()}</span>{cue.text}</p>)}</div> : null}
+      {visibleCues.length ? <div className="admin-multi-subtitle-overlay">{visibleCues.map(({ language, cue }) => <p key={language} data-language={language}><span>{language.toUpperCase()}</span><SubtitleMarkup text={cue.text} /></p>)}</div> : null}
       {loading ? <div className="admin-player-loading"><Activity size={22} /> Preparing stream…</div> : null}
       {error ? <div className="admin-player-error"><AlertTriangle size={22} /><strong>Unable to play this title</strong><span>{error}</span></div> : null}
     </div>

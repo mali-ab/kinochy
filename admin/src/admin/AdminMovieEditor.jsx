@@ -39,6 +39,7 @@ export default function AdminMovieEditor({ id = null }) {
   return (
     <MovieEditor
       movie={movie}
+        initialView={searchParams.get('view')}
       templateMovie={series}
       initialType={initialType}
       genres={genres}
@@ -58,8 +59,12 @@ export default function AdminMovieEditor({ id = null }) {
   );
 }
 
-function MovieEditor({ movie, templateMovie = null, initialType, genres, countryOptions = [], relation = null, onCancel, onSaved }) {
+function MovieEditor({ movie, initialView = 'details', templateMovie = null, initialType, genres, countryOptions = [], relation = null, onCancel, onSaved }) {
   const qualityOnly = Boolean(relation || movie?.type === 'Episode');
+  const separatedViews = Boolean(!relation && !qualityOnly);
+  const [editorView, setEditorView] = useState(initialView === 'media' ? 'media' : 'details');
+  const showDetails = !separatedViews || editorView === 'details';
+  const showMedia = !separatedViews || editorView === 'media';
   const savedQualities = movie?.streaming?.qualities || [];
   const [form, setForm] = useState(() => {
     if (movie) return cloneMovieForm(movieToForm(movie));
@@ -157,6 +162,10 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
 
   async function submit(event) {
     event.preventDefault();
+    if (!movie && !relation && editorView === 'details') {
+      setEditorView('media');
+      return;
+    }
     setBusy(true);
     setUploadStatus({ phase: 'uploading', percent: 0 });
     setError('');
@@ -165,9 +174,9 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
     const selectedQualityUploads = qualityUploads.filter((item) => item.file);
     const emptyQualityUploads = qualityUploads.filter((item) => !item.existing && !item.file);
     const removedQualities = savedQualities.filter((quality) => !qualityUploads.some((item) => item.existing && item.quality === quality));
-    if (sourceType === 'library' && !serverMediaPath) missingFiles.push('a title folder from the media library');
-    if (!form.isSeries && sourceType === 'hls' && !qualityUploads.some((item) => item.existing || item.file)) missingFiles.push('at least one HLS quality ZIP');
-    if (!form.isSeries && sourceType === 'hls' && emptyQualityUploads.length) missingFiles.push(`a ZIP for ${emptyQualityUploads.map((item) => item.quality).join(', ')}`);
+    if (showMedia && sourceType === 'library' && !serverMediaPath) missingFiles.push('a title folder from the media library');
+    if (showMedia && !form.isSeries && sourceType === 'hls' && !qualityUploads.some((item) => item.existing || item.file)) missingFiles.push('at least one HLS quality ZIP');
+    if (showMedia && !form.isSeries && sourceType === 'hls' && emptyQualityUploads.length) missingFiles.push(`a ZIP for ${emptyQualityUploads.map((item) => item.quality).join(', ')}`);
     if (missingFiles.length) {
       setBusy(false);
       setUploadStatus({ phase: 'idle', percent: 0 });
@@ -181,18 +190,21 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
       if (key === 'countries') return;
       body.append(key, key === 'genres' ? JSON.stringify(value) : value);
     });
-    Object.entries(files).forEach(([key, file]) => file && (!form.isSeries || key === 'cover') && body.append(key, file));
-    if (!form.isSeries && !files.subtitleZip) subtitleUploads.forEach((item) => item.file && body.append(`subtitle_${item.language.toLowerCase()}`, item.file));
+    Object.entries(files).forEach(([key, file]) => {
+      const belongsToView = !separatedViews || (showDetails ? key === 'cover' : key !== 'cover');
+      if (file && belongsToView && (!form.isSeries || key === 'cover')) body.append(key, file);
+    });
+    if (showMedia && !form.isSeries && !files.subtitleZip) subtitleUploads.forEach((item) => item.file && body.append(`subtitle_${item.language.toLowerCase()}`, item.file));
     const removedSubtitleLanguages = (movie?.subtitleLanguages || []).filter((language) => !subtitleUploads.some((item) => item.language === language));
-    if (!form.isSeries && removedSubtitleLanguages.length) body.append('removeSubtitleLanguages', JSON.stringify(removedSubtitleLanguages));
+    if (showMedia && !form.isSeries && removedSubtitleLanguages.length) body.append('removeSubtitleLanguages', JSON.stringify(removedSubtitleLanguages));
     if (relation) {
       body.append('seriesId', relation.seriesId);
       body.append('seasonNumber', String(relation.seasonNumber));
       body.append('episodeNumber', String(relation.episodeNumber));
     }
-    if (sourceType === 'library') body.append('serverMediaPath', serverMediaPath);
-    if (!form.isSeries && sourceType === 'hls' && removedQualities.length) body.append('removeQualities', JSON.stringify(removedQualities));
-    if (!form.isSeries) selectedQualityUploads.forEach((item) => body.append(`quality_${item.quality}`, item.file));
+    if (showMedia && sourceType === 'library') body.append('serverMediaPath', serverMediaPath);
+    if (showMedia && !form.isSeries && sourceType === 'hls' && removedQualities.length) body.append('removeQualities', JSON.stringify(removedQualities));
+    if (showMedia && !form.isSeries) selectedQualityUploads.forEach((item) => item.file && body.append(`quality_${item.quality}`, item.file));
 
     try {
       const saved = await apiUpload(movie ? `/api/admin/movies/${movie.id}` : '/api/admin/movies', {
@@ -246,12 +258,16 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
   return (
     <form className="admin-form" onSubmit={submit}>
       <div className="admin-list-head admin-editor-heading">
-        <div><span className="admin-editor-eyebrow">Kinoçy studio / Movie library</span><h2>{relation ? `Add episode ${relation.episodeNumber}` : movie?.type === 'Episode' ? 'Edit episode media' : movie ? 'Edit movie' : 'Add a movie'}</h2><p>{qualityOnly ? 'Manage the video qualities and subtitles for this episode.' : 'Set up the details, choose a playback source, then publish.'}</p></div>
+        <div><span className="admin-editor-eyebrow">Kinoçy studio / Movie library</span><h2>{relation ? `Add episode ${relation.episodeNumber}` : movie?.type === 'Episode' ? 'Edit episode media' : movie ? 'Edit movie' : 'Add a movie'}</h2><p>{qualityOnly ? 'Manage the video qualities and subtitles for this episode.' : separatedViews ? (editorView === 'media' ? 'Manage HLS qualities and subtitles.' : 'Edit the title details and catalog information.') : 'Set up the details, choose a playback source, then publish.'}</p></div>
         <button type="button" onClick={onCancel}>Cancel</button>
       </div>
+      {separatedViews ? <nav className="admin-editor-tabs" aria-label="Movie editor views">
+        <button type="button" className={editorView === 'details' ? 'active' : ''} aria-current={editorView === 'details' ? 'page' : undefined} onClick={() => setEditorView('details')}><Film size={17} /> Title details</button>
+        <button type="button" className={editorView === 'media' ? 'active' : ''} aria-current={editorView === 'media' ? 'page' : undefined} onClick={() => setEditorView('media')}><Upload size={17} /> HLS & subtitles</button>
+      </nav> : null}
       {relation ? <p className="form-message">Adding episode {relation.episodeNumber} to {relation.seriesTitle || 'series'}, season {relation.seasonNumber}. Saving will link this movie automatically.</p> : null}
-      {qualityOnly ? <div className="episode-title-field"><label>Episode title<input required maxLength="200" value={form.titleEn} onChange={updateEpisodeTitle} placeholder="Enter the episode title" /></label></div> : null}
-      {!qualityOnly ? <><div className="admin-editor-roadmap" aria-label="Publishing steps">
+      {qualityOnly && showDetails ? <div className="episode-title-field"><label>Episode title<input required maxLength="200" value={form.titleEn} onChange={updateEpisodeTitle} placeholder="Enter the episode title" /></label></div> : null}
+      {showDetails && !qualityOnly ? <><div className="admin-editor-roadmap" aria-label="Publishing steps">
         <span className="active"><strong>01</strong><small>Localized metadata</small></span>
         <span className={form.isSeries ? 'muted' : ''}><strong>02</strong><small>{form.isSeries ? 'Series structure' : 'Playback source'}</small></span>
         <span><strong>03</strong><small>Artwork & subtitles</small></span>
@@ -259,12 +275,12 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
       <div className="admin-editor-section-head"><span className="admin-editor-step">01</span><div><h3>Title details</h3><p>Help viewers find the right film and language level.</p></div></div>
       <div className="form-grid">
         <fieldset className="localized-copy wide"><legend>Title name</legend><div className="localized-fields">
-          <label>Turkmen (TK)<input name="titleTm" required value={form.titleTm} onChange={updateField} /></label>
-          <label>English (EN)<input name="titleEn" required value={form.titleEn} onChange={updateField} /></label>
-          <label>Russian (RU)<input name="titleRu" required value={form.titleRu} onChange={updateField} /></label>
+          <label>Turkmen (TK)<input name="titleTm" required={showDetails} value={form.titleTm} onChange={updateField} /></label>
+          <label>English (EN)<input name="titleEn" required={showDetails} value={form.titleEn} onChange={updateField} /></label>
+          <label>Russian (RU)<input name="titleRu" required={showDetails} value={form.titleRu} onChange={updateField} /></label>
         </div></fieldset>
         <label>{t('admin_original_title')}<input name="originalTitle" value={form.originalTitle} onChange={updateField} /></label>
-        <label>{t('admin_year')}<input name="year" type="number" inputMode="numeric" min="1888" max={new Date().getFullYear() + 5} step="1" required value={form.year} onChange={updateField} /></label>
+        <label>{t('admin_year')}<input name="year" type="number" inputMode="numeric" min="1888" max={new Date().getFullYear() + 5} step="1" required={showDetails} value={form.year} onChange={updateField} /></label>
         <label>{t('admin_country')}<select className="multi-select" multiple value={form.countries} onChange={updateCountries}>{countryOptions.map((country) => <option key={country.code} value={country.name}>{country.name}</option>)}</select></label>
         <label className="wide">{t('admin_genres')}<div className="genre-chips">{genres.map((genre) => <button type="button" key={genre.code} className={form.genres.includes(genre.code) ? 'active' : ''} onClick={() => toggleGenre(genre.code)}>{translateGenre(locale, genre.code, genres)}</button>)}</div></label>
         <label>Category<select name="type" value={form.type} onChange={updateField}><option value="Movie">Movie</option><option value="Cartoon">Cartoon</option></select></label>
@@ -280,14 +296,14 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
         <label>{t('admin_rating')}<input name="rating" value={form.rating} onChange={updateField} /></label>
         <label>{t('understanding_difficulty')}<select name="difficulty" value={form.difficulty} onChange={updateField}><option value="easy">{translateDifficulty(locale, 'easy')}</option><option value="medium">{translateDifficulty(locale, 'medium')}</option><option value="hard">{translateDifficulty(locale, 'hard')}</option></select></label>
         <fieldset className="localized-copy wide"><legend>Title description</legend><div className="localized-fields localized-descriptions">
-          <label>Turkmen (TK)<textarea name="descriptionTm" rows="5" required value={form.descriptionTm} onChange={updateField} /></label>
-          <label>English (EN)<textarea name="descriptionEn" rows="5" required value={form.descriptionEn} onChange={updateField} /></label>
-          <label>Russian (RU)<textarea name="descriptionRu" rows="5" required value={form.descriptionRu} onChange={updateField} /></label>
+          <label>Turkmen (TK)<textarea name="descriptionTm" rows="5" required={showDetails} value={form.descriptionTm} onChange={updateField} /></label>
+          <label>English (EN)<textarea name="descriptionEn" rows="5" required={showDetails} value={form.descriptionEn} onChange={updateField} /></label>
+          <label>Russian (RU)<textarea name="descriptionRu" rows="5" required={showDetails} value={form.descriptionRu} onChange={updateField} /></label>
         </div></fieldset>
       </div>
       </> : null}
 
-      <div className="admin-editor-section-head"><span className="admin-editor-step">{qualityOnly ? '01' : '02'}</span><div><h3>{form.isSeries ? 'Series episodes' : qualityOnly ? 'Episode video qualities' : 'Video qualities'}</h3><p>{form.isSeries ? 'Add episodes after publishing, or import a complete series folder.' : qualityOnly ? 'Upload one HLS ZIP for every quality available for this episode.' : 'Upload a ZIP for each quality, or select a converted HLS folder on the server.'}</p></div></div>
+      {showMedia ? <><div className="admin-editor-section-head"><span className="admin-editor-step">{qualityOnly ? '01' : '02'}</span><div><h3>{form.isSeries ? 'Series episodes' : qualityOnly ? 'Episode video qualities' : 'Video qualities'}</h3><p>{form.isSeries ? 'Add episodes after publishing, or import a complete series folder.' : qualityOnly ? 'Upload one HLS ZIP for every quality available for this episode.' : 'Upload a ZIP for each quality, or select a converted HLS folder on the server.'}</p></div></div>
       {!qualityOnly ? <div className="source-switch" role="group" aria-label="Playback source">
         <button type="button" className={sourceType === 'hls' ? 'active' : ''} onClick={() => changeSource('hls')} aria-pressed={sourceType === 'hls'}><Upload size={18} /><span><strong>{form.isSeries ? 'Add episodes after saving' : 'HLS quality ZIPs'}</strong><small>{form.isSeries ? 'Create seasons and upload episode videos' : 'One ZIP for each resolution'}</small></span></button>
         <button type="button" className={sourceType === 'library' ? 'active' : ''} onClick={() => changeSource('library')} aria-pressed={sourceType === 'library'}><FolderSearch size={18} /><span><strong>Server folder</strong><small>Import converted HLS instantly</small></span></button>
@@ -307,23 +323,23 @@ function MovieEditor({ movie, templateMovie = null, initialType, genres, country
         </div>)}</div> : <p className="quality-upload-empty">Use this when your converter produces separate 360p, 720p, 1080p, or 4K ZIP bundles. Kinoçy creates the adaptive master playlist automatically.</p>}
       </div> : null}
       {form.isSeries && sourceType === 'hls' ? <p className="source-note bundle-note"><strong>Series workflow:</strong> publish the series title first. On its details page, create seasons and then add playable episodes inside each season.</p> : null}
+      </> : null}
 
-      {!qualityOnly ? <><div className="admin-editor-section-head"><span className="admin-editor-step">{form.isSeries ? '02' : '03'}</span><div><h3>Artwork & subtitle tracks</h3><p>{form.isSeries ? 'Add artwork for the series title. Episode subtitles belong to each episode movie.' : 'Add English, Russian, and Turkish tracks separately, or upload them together in a ZIP.'}</p></div></div>
+      {showDetails && !qualityOnly ? <><div className="admin-editor-section-head"><span className="admin-editor-step">03</span><div><h3>Artwork</h3><p>Add the cover image shown in the catalog.</p></div></div>
       <div className="upload-grid">
         <FileBox icon={<ImageIcon />} name="cover" label={t('admin_cover_image')} accept="image/*" file={files.cover} current={currentFiles.cover} preview={coverPreview} progress={progress.cover} onChange={updateFile} onRemove={() => removeFile('cover')} />
-        {!form.isSeries ? <><div className="subtitle-bundle-upload"><FileBox icon={<Upload />} name="subtitleZip" label="Subtitle ZIP · EN + RU + TK" accept=".zip,application/zip" file={files.subtitleZip} progress={progress.subtitleZip} onChange={updateFile} onRemove={() => removeFile('subtitleZip')} /><p>Name each file with its language code: <code>movie.en.srt</code>, <code>movie.ru.srt</code>, <code>movie.tk.vtt</code>.</p></div>{!files.subtitleZip ? <SubtitleTrackEditor tracks={subtitleUploads} setTracks={setSubtitleUploads} /> : null}</> : null}
       </div>
       </> : null}
 
-      {qualityOnly ? <><div className="admin-editor-section-head"><span className="admin-editor-step">02</span><div><h3>Episode subtitles</h3><p>Add as many subtitle languages as this episode needs.</p></div></div>
+      {showMedia && !form.isSeries ? <><div className="admin-editor-section-head"><span className="admin-editor-step">{qualityOnly ? '02' : '03'}</span><div><h3>{qualityOnly ? 'Episode subtitles' : 'Subtitles'}</h3><p>Add English, Russian, and Turkish tracks separately, or upload them together in a ZIP.</p></div></div>
       <div className="upload-grid episode-subtitle-grid">
-        <div className="subtitle-bundle-upload"><FileBox icon={<Upload />} name="subtitleZip" label="Subtitle ZIP · EN + RU + TK" accept=".zip,application/zip" file={files.subtitleZip} progress={progress.subtitleZip} onChange={updateFile} onRemove={() => removeFile('subtitleZip')} /><p>Use <code>episode.en.srt</code>, <code>episode.ru.srt</code>, and <code>episode.tk.vtt</code>.</p></div>
+        <div className="subtitle-bundle-upload"><FileBox icon={<Upload />} name="subtitleZip" label="Subtitle ZIP · EN + RU + TK" accept=".zip,application/zip" file={files.subtitleZip} progress={progress.subtitleZip} onChange={updateFile} onRemove={() => removeFile('subtitleZip')} /><p>Use language-coded names such as <code>movie.en.srt</code>, <code>movie.ru.srt</code>, and <code>movie.tk.vtt</code>.</p></div>
         {!files.subtitleZip ? <SubtitleTrackEditor tracks={subtitleUploads} setTracks={setSubtitleUploads} /> : null}
       </div></> : null}
 
       {error ? <p className="form-error">{error}</p> : null}
       <button className="primary admin-publish" disabled={busy}>
-        <Save size={18} /> {busy ? t('admin_uploading') : relation ? 'Publish episode' : movie?.type === 'Episode' ? 'Save episode qualities' : movie ? 'Save movie' : t('admin_publish')}
+        <Save size={18} /> {busy ? t('admin_uploading') : separatedViews ? (!movie && editorView === 'details' ? 'Continue to HLS' : editorView === 'media' ? (form.isSeries ? (movie ? 'Save series title' : 'Publish series') : movie ? 'Save HLS & subtitles' : form.type === 'Cartoon' ? 'Publish cartoon' : 'Publish movie') : 'Save title details') : relation ? 'Publish episode' : movie?.type === 'Episode' ? 'Save episode qualities' : movie ? 'Save movie' : t('admin_publish')}
       </button>
       {busy ? <UploadStatus status={uploadStatus} /> : null}
     </form>

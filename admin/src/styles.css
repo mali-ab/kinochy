@@ -84,8 +84,6 @@ a:visited {
   width: 38px;
   height: 38px;
   margin-right: 10px;
-  border-radius: 6px;
-  background: #11181d;
 }
 
 .brand-mark img {
@@ -2272,8 +2270,8 @@ body {
 }
 
 .brand-mark {
-  border-radius: 10px;
-  background: #12313c;
+  border-radius: 0;
+  background: transparent;
 }
 
 .nav-tabs a {
@@ -3650,7 +3648,6 @@ h1, h2, h3, h4, .brand, .movie-title, .catalog-feature h1 {
   border-bottom-color: var(--cinema-border);
 }
 
-.brand-mark,
 .search,
 .language-picker select,
 .user-link,
@@ -4782,7 +4779,7 @@ h1, h2, h3, h4, .brand, .movie-title, .catalog-feature h1 {
 .admin-topbar { position: sticky; z-index: 80; top: 0; border-bottom: 1px solid rgba(148,163,184,.14); background: rgba(9,15,27,.93); box-shadow: 0 16px 42px rgba(2,6,23,.24); backdrop-filter: blur(18px); }
 .admin-topbar-inner { display: flex; width: min(100% - 40px, 1440px); min-height: 76px; margin: 0 auto; align-items: center; gap: 24px; }
 .admin-topbar .admin-brand { display: inline-flex; min-width: 220px; align-items: center; gap: 11px; color: #f8fafc; text-decoration: none; }
-.admin-topbar .brand-mark { display: grid; width: 44px; height: 44px; flex: 0 0 auto; place-items: center; overflow: hidden; border: 1px solid rgba(34,211,238,.35); border-radius: 13px; background: linear-gradient(145deg, rgba(34,211,238,.18), rgba(30,41,59,.85)); box-shadow: inset 0 1px rgba(255,255,255,.1), 0 8px 24px rgba(6,182,212,.12); }
+.admin-topbar .brand-mark { display: grid; width: 44px; height: 44px; flex: 0 0 auto; place-items: center; overflow: hidden; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .admin-topbar .brand-mark img { width: 36px; height: 36px; object-fit: contain; }
 .admin-brand-copy { display: grid; gap: 1px; }
 .admin-brand-copy strong { font-size: 17px; letter-spacing: -.02em; }
@@ -5288,7 +5285,7 @@ h1, h2, h3, h4, .brand, .movie-title, .catalog-feature h1 {
 .admin-login-story { display: flex; position: relative; padding: clamp(32px,5vw,64px); flex-direction: column; overflow: hidden; background: radial-gradient(circle at 80% 22%,rgba(45,212,191,.18),transparent 25%), linear-gradient(145deg,#102842,#0b1b30 58%,#081522); }
 .admin-login-story::after { position: absolute; right: -95px; bottom: -110px; width: 330px; height: 330px; border: 1px solid rgba(94,234,212,.14); border-radius: 50%; box-shadow: 0 0 0 52px rgba(94,234,212,.035),0 0 0 105px rgba(94,234,212,.025); content: ''; }
 .admin-login-brand { display: flex; position: relative; z-index: 1; align-items: center; gap: 12px; }
-.admin-login-brand > span { display: grid; width: 48px; height: 48px; place-items: center; border: 1px solid rgba(94,234,212,.3); border-radius: 15px; background: rgba(45,212,191,.1); }
+.admin-login-brand > span { display: grid; width: 48px; height: 48px; place-items: center; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .admin-login-brand img { width: 38px; height: 38px; object-fit: contain; }
 .admin-login-brand > div { display: grid; gap: 2px; }
 .admin-login-brand strong { color: #f8fafc; font-size: 20px; letter-spacing: -.03em; }
@@ -5440,7 +5437,7 @@ h1, h2, h3, h4, .brand, .movie-title, .catalog-feature h1 {
 .admin-multi-subtitle-overlay p:nth-child(2) { color: #fde68a; }
 .admin-multi-subtitle-overlay p:nth-child(3) { color: #a7f3d0; }
 .admin-multi-subtitle-overlay p:nth-child(4) { color: #bfdbfe; }
-.admin-multi-subtitle-overlay p span { margin-right: 7px; color: #5eead4; font-size: .42em; font-weight: 900; vertical-align: middle; }
+.admin-multi-subtitle-overlay p > span:first-child { margin-right: 7px; color: #5eead4; font-size: .42em; font-weight: 900; vertical-align: middle; }
 .subtitle-track-editor { display: grid; grid-column: 1/-1; gap: 9px; padding: 14px; border: 1px solid rgba(148,163,184,.16); border-radius: 14px; background: rgba(9,20,35,.48); }
 .subtitle-track-editor-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .subtitle-track-editor-head > div { display: grid; gap: 2px; }
@@ -5480,3 +5477,7 @@ h1, h2, h3, h4, .brand, .movie-title, .catalog-feature h1 {
   .admin-shaka-container .shaka-volume-bar-container { display: none; }
   .admin-shaka-container .shaka-current-time { min-width: 92px; max-width: 145px; }
 }
+.admin-editor-tabs { display: flex; flex-wrap: wrap; gap: 8px; padding: 5px; border: 1px solid rgba(148,163,184,.16); border-radius: 13px; background: rgba(9,20,35,.58); }
+.admin-editor-tabs button { display: inline-flex; min-height: 42px; padding: 0 15px; align-items: center; gap: 8px; border: 1px solid transparent; border-radius: 9px; color: #9aabc0; background: transparent; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.admin-editor-tabs button:hover { color: #e2e8f0; background: rgba(148,163,184,.08); }
+.admin-editor-tabs button.active { border-color: rgba(45,212,191,.28); color: #5eead4; background: rgba(45,212,191,.1); }

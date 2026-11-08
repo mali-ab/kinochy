@@ -3,6 +3,7 @@ import { useTranslations } from 'use-intl';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api/client';
 import { withBasePath } from '../paths';
+import SubtitleMarkup, { hasSubtitleMarkup } from './SubtitleMarkup.jsx';
 
 const fontMap = {
   Verdana: 'Verdana, Geneva, sans-serif',
@@ -141,7 +142,10 @@ export default function MoviePlayer({ movie, subtitles, access }) {
           enableWorker: true,
           lowLatencyMode: false,
           startPosition: -1,
-          startLevel: 0,
+          // Let HLS.js pick a safe first rendition from its bandwidth estimate,
+          // then cap automatic upswitching to the rendered video size.
+          startLevel: -1,
+          capLevelToPlayerSize: true,
           ...compactConfig,
           startFragPrefetch: true
         });
@@ -1168,6 +1172,7 @@ function SubtitleList({
 
 function InteractiveText({ text, lang, pairText = '', onLookup, onHoverWord, hoveredWord }) {
   const parts = useMemo(() => splitText(text), [text]);
+  if (hasSubtitleMarkup(text)) return <SubtitleMarkup text={text} />;
 
   return parts.map((part, index) =>
     part.word ? (

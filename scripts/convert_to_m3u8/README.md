@@ -1,6 +1,6 @@
 # MP4 to adaptive HLS
 
-This script converts one MP4 into a master `master.m3u8` playlist with a separate folder and media playlist for every selected quality.
+This script converts a video into a master `master.m3u8` playlist with a separate folder and media playlist for every selected quality. It encodes each quality sequentially, which lowers peak memory use compared with running all quality encoders at once.
 
 ## Setup
 
@@ -36,3 +36,5 @@ movie_hls/
 ```
 
 The source must have video and audio streams. The script never deletes or replaces files in a non-empty output folder.
+
+The defaults use H.264 CRF 24, the `medium` preset, AAC audio at 96 kb/s, and four-second segments. Four-second segments reduce startup and seeking delay; they do not improve picture quality by themselves. Lower `VIDEO_CRF` (for example, 22) for higher quality and larger files; increase it for smaller files with more quality loss. `VIDEO_THREADS=1` reduces peak memory further at the cost of slower encoding. Multiple qualities are encoded one at a time, so selecting more qualities takes longer but does not multiply the encoder's peak memory usage. Reconvert existing movies to apply segment or quality changes.

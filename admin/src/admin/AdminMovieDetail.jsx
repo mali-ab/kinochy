@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, Edit3, MessageSquareText, Play, Plus, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit3, MessageSquareText, Play, Plus, Trash2, Upload } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -35,8 +35,11 @@ export default function AdminMovieDetail({ id }) {
       <div className="admin-detail-head">
         <button onClick={() => navigate(`/${movieSection(movie.type)}`)}>Back</button>
         <div className="admin-actions">
-          <Link to={`${movieDetailPath(movie)}/edit`}>
-            <Edit3 size={16} /> Edit
+          <Link to={`${movieDetailPath(movie)}/edit?view=details`}>
+            <Edit3 size={16} /> Edit details
+          </Link>
+          <Link to={`${movieDetailPath(movie)}/edit?view=media`}>
+            <Upload size={16} /> Manage HLS
           </Link>
           <button
             className="danger"

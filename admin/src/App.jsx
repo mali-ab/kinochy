@@ -8,7 +8,6 @@ import AdminShell from './admin/AdminShell.jsx';
 import AdminUserDetail from './admin/AdminUserDetail.jsx';
 import AdminUsersList from './admin/AdminUsersList.jsx';
 
-// The standalone admin application owns its origin, so routes start at /.
 // Vite injects the build base (APP_BASE_PATH, e.g. /admin/) as BASE_URL.
 // Use it as the router basename so the SPA works when nginx mounts it under
 // /admin/ alongside the public site; "/" strips to "" (root mount, no-op).
